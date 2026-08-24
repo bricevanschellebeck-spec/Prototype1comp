@@ -1,16 +1,31 @@
 # AI-Assembled Interactive Learning Environment
 
+## Prototype routes
+
+- `/` — Prototype 1: the original static experience and visual concept.
+- `/prototype-2` — Prototype 2: deterministic adaptation from learner evidence.
+- `/prototype-3` — Prototype 3: constrained lesson composition with the local
+  Ollama model and a verified offline fallback.
+
+Prototype 3 keeps the learning area object-first and uses AI only to select and
+sequence registered block IDs. See [PROTOTYPE_3.md](./PROTOTYPE_3.md) for its
+architecture, local Ollama instructions, demonstration path, and deployment
+limitation.
+
 ## Project status
 
-Prototype 1 is now under active development. The first vertical slice is implemented:
+The current teacher-presentation build is a static Prototype 1 demonstration. It implements:
 
-- Five human-authored and registered Ohm's law learning blocks
+- A five-step learner path assembled from human-authored, registered circuits blocks
 - Typed catalog and structured lesson-blueprint contracts
 - Deterministic blueprint validation
-- A local safe composer for development and fallback behavior
-- An optional server-side AI composer using strict structured output
+- A browser-side local composer that demonstrates the future composition mechanism
 - A Composer Lab that exposes inputs, blueprint decisions, validation, and rendering
-- Interactive circuit simulation, prediction, graph, and challenge components
+- Object-led progression: close the circuit, compare the battery, test resistance, inspect the graph, then connect the formula
+
+The teaching order for this build is **experience → notice → name → explain → connect → apply**. Terms appear only after the learner has experienced the thing being named, and `I = V ÷ R` is withheld until the final block.
+
+This presentation build contains no model call, API key, database, or runtime server endpoint. Its branching and composition are deliberately scripted so teachers can evaluate the learning-interface idea before AI is introduced.
 
 Do not begin broad product development until Prototype 1 passes its full acceptance gate.
 
@@ -41,9 +56,7 @@ pnpm test
 pnpm build
 ```
 
-The application works without an API key by using the deterministic safe composer. To test real AI composition, copy `.env.example` to `.env.local` and set `OPENAI_API_KEY`. The key is read only by the server route and must never be committed.
-
-The model is configured through `OPENAI_MODEL`. AI output is validated against both a strict JSON Schema and the trusted catalog. An invalid response receives one repair attempt before the application returns to the local safe composer.
+The current build is entirely static. It assembles a verified local blueprint in the browser and requires no environment variables. A constrained model composer remains a future competition-development step, after the educational flow and block vocabulary have been reviewed.
 
 ## Core concept
 
@@ -339,11 +352,16 @@ Prototype 1 passes when:
 
 Do not expand into accounts, databases, broad analytics, or a complete circuits course until this gate passes.
 
-## Prototype 2: Adaptive recomposition
+## Prototype 2: Deterministic adaptive selection
 
 ### Question to prove
 
-> Can learner interaction change the AI-composed remainder of a lesson while deterministic rules preserve curriculum validity and safety?
+> Can learner interaction change which trusted learning block appears next?
+
+Prototype 2 deliberately does not call an AI model. It proves the adaptation
+architecture that Prototype 3 will later expose to a constrained AI composer.
+The static browser flow is available at `/prototype-2`; Prototype 1 remains at
+`/`.
 
 ### Normalized block outcome
 
@@ -352,12 +370,10 @@ type BlockOutcome = {
   blockId: string;
   objectiveIds: string[];
   completed: boolean;
-  correctness?: number;
-  attempts?: number;
-  hintUsed?: boolean;
-  responseCategory?: string;
-  timeSpentSeconds: number;
-  interactionSummary: string[];
+  correct?: boolean;
+  attempts: number;
+  hintUsed: boolean;
+  misconceptionIds: string[];
 };
 ```
 
@@ -367,27 +383,28 @@ Each React component translates raw UI interactions into this shared format. The
 
 ```ts
 type LearnerState = {
-  objectiveMastery: Record<string, number>;
-  activeMisconceptions: string[];
+  objectiveStatus: Record<string, "unseen" | "developing" | "secure">;
+  activeMisconceptionIds: string[];
   completedBlockIds: string[];
   recentInteractionTypes: string[];
-  recentSuccessfulInteractionTypes: string[];
-  scaffoldLevel: "high" | "medium" | "low";
+  lastOutcome?: BlockOutcome;
 };
 ```
 
-The initial updater should be deterministic and explainable. It converts block outcomes into learner-state evidence. It does not choose the next learning block.
+The updater and selector are deterministic and explainable. React blocks emit
+outcomes; they never choose their own successor.
 
-### Recomposition contract
+### Next-block decision contract
 
-Recomposition occurs after meaningful checkpoints rather than after every click. The composer receives completed outcomes, the updated learner state, remaining objectives, legal candidate blocks, and current constraints.
-
-It returns a patch for only the unfinished lesson:
+Selection occurs after a completed learning block rather than after every click.
+The engine filters the trusted catalog by objective, prerequisites, completion
+history, and misconception evidence, then returns:
 
 ```ts
-type BlueprintPatch = {
-  preserveCompletedThroughStepId: string;
-  replacementSteps: BlueprintStep[];
+type NextBlockDecision = {
+  selectedBlockId: string | null;
+  targetObjectiveId: string | null;
+  candidates: CandidateEvaluation[];
   reasonCodes: string[];
 };
 ```
@@ -395,14 +412,14 @@ type BlueprintPatch = {
 The verification layer must ensure that:
 
 - Completed history is immutable.
-- Required objectives remain covered.
+- Curriculum objectives remain ordered.
 - Prerequisites remain satisfied.
-- The completion check remains present.
 - The same failed assessment is not immediately repeated without support.
 - Only registered blocks are inserted.
-- The revised lesson remains within its time and accessibility constraints.
 
-Deterministic code filters illegal choices. The AI chooses the particular legal activity or representation.
+Rules are the guardrails and the composer for this prototype. Prototype 3 will
+let AI choose among the same legal candidates without changing the block or
+renderer contracts.
 
 ### Expected adaptive behavior
 
@@ -417,33 +434,35 @@ Prediction incorrect
     -> equivalent retry
 ```
 
-These are illustrative outcomes, not a hardcoded branch table.
+The selector scores metadata roles rather than placing routing logic inside the
+renderer. The current catalog is intentionally small enough that the decisions
+remain easy to inspect.
 
 ### Prototype 2 acceptance gate
 
 Prototype 2 passes when:
 
-- Correct, incorrect, and uncertain outcomes produce educationally appropriate differences in the remaining lesson.
-- The AI, rather than a hardcoded routing table, chooses the specific legal blocks.
+- First-attempt success and support-needed evidence produce meaningfully different paths.
+- Selection happens through the catalog engine rather than renderer-specific block IDs.
 - Completed steps are never changed.
-- Recomposition cannot bypass prerequisites or remove required assessment.
-- An AI failure leaves the learner on a valid fallback path.
-- The system can explain which evidence and constraints influenced recomposition.
-- The learner can request another representation without receiving a permanent learning-style label.
+- Selection cannot bypass prerequisites.
+- The interface explains which evidence and candidates influenced each choice.
+- Both branches return to the same required application objectives.
 
 ## Initial implementation boundaries
 
-Use a deliberately small full-stack web architecture:
+Prototype 2 uses a deliberately small static web architecture:
 
 - React and TypeScript for components and rendering.
-- A server-side endpoint for the composer so model credentials never reach the browser.
-- Versioned JSON or TypeScript files for the topic specification, block catalog, resources, and fallback blueprints.
-- Runtime schema validation for all model responses.
-- Structured model output rather than parsing conversational prose.
-- Automated unit tests for schemas, validation, catalog filtering, and rendering.
-- Browser tests for complete composition and recomposition scenarios.
+- Versioned TypeScript for the curriculum, catalog, outcomes, learner state, and decisions.
+- Pure deterministic functions for state updates, candidate evaluation, and selection.
+- In-memory React state with a reusable component registry.
+- Automated tests for catalog validity and both adaptive trajectories.
 
-Prototype 1 does not require:
+Prototype 3 adds the server-side model endpoint, structured AI output, runtime
+validation, repair, and fallback behavior.
+
+Prototype 2 does not require:
 
 - A database
 - Learner accounts

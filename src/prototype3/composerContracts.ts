@@ -10,6 +10,7 @@ export const reasonCodeSchema = z.enum([
   "test-through-manipulation",
   "offer-alternate-representation",
   "respond-to-misconception",
+  "connect-observation-to-symbols",
   "increase-challenge",
   "confirm-transfer",
 ]);
@@ -22,7 +23,7 @@ export const blockOutcomeSchema = z.object({
   attempts: z.number().int().min(0).max(20),
   hintUsed: z.boolean(),
   misconceptionIds: z.array(z.string().min(1).max(100)).max(8),
-});
+}).strict();
 
 export const learnerStateSchema = z.object({
   objectiveStatus: z.record(
@@ -33,7 +34,7 @@ export const learnerStateSchema = z.object({
   completedBlockIds: z.array(z.string().min(1).max(100)).max(20),
   recentInteractionTypes: z.array(z.string().min(1).max(100)).max(6),
   lastOutcome: blockOutcomeSchema.optional(),
-});
+}).strict();
 
 export const p3ComposeRequestSchema = z.object({
   phase: compositionPhaseSchema,
@@ -50,11 +51,13 @@ export const blueprintStepSchema = z.object({
 }).strict();
 
 export const p3LessonBlueprintSchema = z.object({
-  blueprintVersion: z.literal("p3-1"),
+  blueprintVersion: z.literal("p3-2"),
   sourceLessonId: z.literal(P3_SOURCE_LESSON_ID),
   objectiveIds: z.array(z.string().min(1).max(100)).min(1).max(6),
+  preserveSourceBlockIds: z.array(z.string().min(1).max(100)).max(9),
+  delaySourceBlockIds: z.array(z.string().min(1).max(100)).max(9),
   remainingSteps: z.array(blueprintStepSchema).min(1).max(5),
-  compositionSummary: z.string().min(1).max(260),
+  compositionSummary: z.string().min(1).max(300),
 }).strict();
 
 export type P3Goal = z.infer<typeof p3GoalSchema>;

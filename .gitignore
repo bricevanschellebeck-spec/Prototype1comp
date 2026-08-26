@@ -20,3 +20,6 @@ Thumbs.db
 
 # test output
 /coverage
+
+# TypeScript incremental cache
+*.tsbuildinfo

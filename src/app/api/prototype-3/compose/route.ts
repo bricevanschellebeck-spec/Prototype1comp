@@ -5,11 +5,11 @@ import {
   composeP3Fallback,
   getP3CandidateBlockIds,
   normalizeP3Blueprint,
+  parseOllamaBlueprintContent,
   validateP3Blueprint,
 } from "@/src/prototype3/composer";
 import {
   p3ComposeRequestSchema,
-  p3LessonBlueprintSchema,
   type P3ComposeResponse,
 } from "@/src/prototype3/composerContracts";
 
@@ -61,7 +61,7 @@ export async function POST(httpRequest: Request) {
     const controller = new AbortController();
     // A small local model can need extra time for its first cold load. Later
     // requests are normally faster because Ollama keeps the model resident.
-    const timeoutId = setTimeout(() => controller.abort(), 75_000);
+    const timeoutId = setTimeout(() => controller.abort(), 45_000);
 
     try {
       const ollamaResponse = await fetch(`${baseUrl}/api/chat`, {
@@ -72,7 +72,8 @@ export async function POST(httpRequest: Request) {
         body: JSON.stringify({
           model,
           stream: false,
-          format: z.toJSONSchema(p3LessonBlueprintSchema),
+          think: false,
+          format: "json",
           messages: [
             {
               role: "system",
@@ -81,7 +82,7 @@ export async function POST(httpRequest: Request) {
             { role: "user", content: buildOllamaPrompt(request) },
           ],
           keep_alive: "10m",
-          options: { temperature: 0.1, num_predict: 260 },
+          options: { temperature: 0.1, num_ctx: 3072, num_predict: 180 },
         }),
       });
 
@@ -95,7 +96,7 @@ export async function POST(httpRequest: Request) {
 
       let candidate: unknown;
       try {
-        candidate = JSON.parse(content);
+        candidate = parseOllamaBlueprintContent(content);
       } catch {
         return fallbackResponse(request, "Ollama returned invalid JSON.");
       }

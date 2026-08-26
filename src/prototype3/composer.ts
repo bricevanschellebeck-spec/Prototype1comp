@@ -1,4 +1,8 @@
-import { adaptiveBlockCatalog, adaptiveBlockCatalogById } from "./catalog";
+import {
+  type WorkspaceBlockId,
+  workspaceBlockCatalog,
+  workspaceBlockCatalogById,
+} from "./catalog";
 import {
   type P3ComposeRequest,
   type P3LessonBlueprint,
@@ -10,20 +14,24 @@ import { createInitialLearnerState } from "./engine";
 import {
   P3_SOURCE_LESSON_ID,
   resistanceSourceLesson,
+  textbookBlockIds,
   trustedFactIds,
+  type TextbookBlockId,
 } from "./sourceLesson";
 
 const IDS = {
-  diagnostic: "resistance-prediction-experiment",
-  misconception: "resistance-misconception-visual",
-  guided: "guided-resistance-experiment",
-  retry: "resistance-equivalent-retry",
-  graph: "current-resistance-graph",
-  target: "target-current-challenge",
-  design: "final-circuit-design-challenge",
-} as const;
+  prediction: "predict-resistance-change",
+  manipulate: "manipulate-resistance",
+  graph: "generate-current-graph",
+  compare: "compare-current-paths",
+  retry: "guided-resistance-retry",
+  formula: "formula-from-measurements",
+  target: "reach-target-current",
+  transfer: "design-transfer-circuit",
+} as const satisfies Record<string, WorkspaceBlockId>;
 
-const supportIds = new Set<string>([IDS.misconception, IDS.guided, IDS.retry]);
+const supportIds = new Set<WorkspaceBlockId>([IDS.compare, IDS.retry]);
+const applicationIds = new Set<WorkspaceBlockId>([IDS.target, IDS.transfer, IDS.formula]);
 
 export function createP3InitialLearnerState(): LearnerState {
   const state = createInitialLearnerState();
@@ -47,79 +55,100 @@ function needsSupport(request: P3ComposeRequest) {
   );
 }
 
-export function getP3CandidateBlockIds(request: P3ComposeRequest): string[] {
+export function getP3CandidateBlockIds(request: P3ComposeRequest): WorkspaceBlockId[] {
   const completed = new Set(request.completedBlockIds);
-  let ids: string[];
-
-  if (request.phase === "initial") {
-    ids = [IDS.guided, IDS.diagnostic, IDS.graph, IDS.target, IDS.design];
-  } else if (needsSupport(request)) {
-    ids = [IDS.misconception, IDS.guided, IDS.retry, IDS.graph, IDS.target, IDS.design];
-  } else {
-    ids = [IDS.graph, IDS.target, IDS.design];
-  }
-
-  return ids.filter((id) => !completed.has(id));
+  const candidates = request.phase === "initial"
+    ? workspaceBlockCatalog.map((block) => block.id)
+    : needsSupport(request)
+      ? [IDS.compare, IDS.retry, IDS.graph, IDS.formula, IDS.target, IDS.transfer]
+      : [IDS.graph, IDS.formula, IDS.target, IDS.transfer];
+  return candidates.filter((id) => !completed.has(id));
 }
 
 function maximumSteps(request: P3ComposeRequest) {
-  if (request.phase === "adapt" && needsSupport(request)) return 5;
-  if (request.depth === 5) return 3;
-  if (request.depth === 15) return 5;
-  return 5;
+  if (request.phase === "adapt" && needsSupport(request)) return 4;
+  return request.depth === 5 ? 3 : 5;
 }
 
-function step(blockId: string, reasonCode: P3LessonBlueprint["remainingSteps"][number]["reasonCode"]) {
+function step(
+  blockId: WorkspaceBlockId,
+  reasonCode: P3LessonBlueprint["remainingSteps"][number]["reasonCode"],
+) {
   return { blockId, reasonCode };
+}
+
+function sourceVisibility(steps: WorkspaceBlockId[]) {
+  const formulaSelected = steps.includes(IDS.formula) || steps.includes(IDS.target);
+  return {
+    preserveSourceBlockIds: ["concept-voltage"] as TextbookBlockId[],
+    delaySourceBlockIds: formulaSelected
+      ? (["ohms-law", "worked-example"] as TextbookBlockId[])
+      : ([] as TextbookBlockId[]),
+  };
 }
 
 export function composeP3Fallback(request: P3ComposeRequest): P3LessonBlueprint {
   let remainingSteps: P3LessonBlueprint["remainingSteps"];
   let compositionSummary: string;
-  const completed = new Set(request.completedBlockIds);
 
   if (request.phase === "adapt" && needsSupport(request)) {
     remainingSteps = [
-      step(IDS.misconception, "respond-to-misconception"),
-      step(IDS.guided, "test-through-manipulation"),
-      step(IDS.retry, "elicit-existing-model"),
+      step(IDS.compare, "respond-to-misconception"),
+      step(IDS.retry, "test-through-manipulation"),
       step(IDS.graph, "offer-alternate-representation"),
       step(IDS.target, "confirm-transfer"),
-    ].filter((item) => !completed.has(item.blockId));
-    compositionSummary = "The evidence showed that support is needed, so the path changes representation before asking the learner to apply the idea again.";
+    ];
+    compositionSummary = "The prediction revealed a misconception, so the unfinished workspace inserts a visual comparison and guided retry before graphing and application.";
   } else if (request.phase === "adapt") {
     remainingSteps = [
       step(IDS.graph, "offer-alternate-representation"),
-      step(IDS.target, "increase-challenge"),
+      step(IDS.formula, "connect-observation-to-symbols"),
+      step(IDS.target, "confirm-transfer"),
     ];
     if (request.depth === 30 || request.goal === "test") {
-      remainingSteps.push(step(IDS.design, "confirm-transfer"));
+      remainingSteps = [
+        step(IDS.graph, "offer-alternate-representation"),
+        step(IDS.formula, "connect-observation-to-symbols"),
+        step(IDS.target, "increase-challenge"),
+        step(IDS.transfer, "confirm-transfer"),
+      ];
     }
-    compositionSummary = "The first interaction produced secure evidence, so the path moves directly to another representation and an application challenge.";
+    compositionSummary = "Secure first-attempt evidence lets the workspace skip support and move directly from an experimental graph to symbols and application.";
+  } else if (request.goal === "revise" && request.depth === 5) {
+    remainingSteps = [
+      step(IDS.prediction, "elicit-existing-model"),
+      step(IDS.target, "increase-challenge"),
+      step(IDS.formula, "connect-observation-to-symbols"),
+    ];
+    compositionSummary = "A short revision path checks the idea, applies it to the target, then connects the learner's result to the formula.";
+  } else if (request.goal === "test") {
+    remainingSteps = [
+      step(IDS.prediction, "elicit-existing-model"),
+      step(IDS.target, "increase-challenge"),
+      step(IDS.transfer, "confirm-transfer"),
+    ];
+    compositionSummary = "The test-preparation path begins with evidence and quickly moves into two applications of the trusted relationship.";
   } else {
-    const exploratory = request.goal === "explore" || request.goal === "understand";
-    remainingSteps = exploratory && request.depth !== 5
-      ? [
-          step(IDS.guided, "test-through-manipulation"),
-          step(IDS.diagnostic, "elicit-existing-model"),
-          step(IDS.graph, "offer-alternate-representation"),
-          step(IDS.target, "confirm-transfer"),
-        ]
-      : [
-          step(IDS.diagnostic, "elicit-existing-model"),
-          step(IDS.graph, "offer-alternate-representation"),
-          step(IDS.target, "confirm-transfer"),
-        ];
-    if (request.depth === 30 && remainingSteps.length < 5) {
-      remainingSteps.push(step(IDS.design, "increase-challenge"));
-    }
-    compositionSummary = "The lesson begins with direct evidence, then changes representation and finishes with an application of the trusted relationship.";
+    remainingSteps = [
+      step(IDS.prediction, "elicit-existing-model"),
+      step(IDS.manipulate, "test-through-manipulation"),
+      step(IDS.graph, "offer-alternate-representation"),
+      step(IDS.formula, "connect-observation-to-symbols"),
+      step(IDS.target, "confirm-transfer"),
+    ].slice(0, maximumSteps(request));
+    compositionSummary = "Begin with a prediction, test it on the circuit, build the graph from observations, then introduce the formula before application.";
   }
 
+  remainingSteps = remainingSteps
+    .filter((item) => !request.completedBlockIds.includes(item.blockId))
+    .slice(0, maximumSteps(request));
+  const visibility = sourceVisibility(remainingSteps.map((item) => item.blockId as WorkspaceBlockId));
+
   return {
-    blueprintVersion: "p3-1",
+    blueprintVersion: "p3-2",
     sourceLessonId: P3_SOURCE_LESSON_ID,
     objectiveIds: [OBJECTIVES.resistance],
+    ...visibility,
     remainingSteps,
     compositionSummary,
   };
@@ -139,145 +168,162 @@ export function validateP3Blueprint(
 
   const blueprint = parsed.data;
   const errors: string[] = [];
-  const candidateIds = new Set(getP3CandidateBlockIds(request));
+  const legal = new Set(getP3CandidateBlockIds(request));
   const completed = new Set(request.completedBlockIds);
-  const selected = blueprint.remainingSteps.map((item) => item.blockId);
+  const selected = blueprint.remainingSteps.map((item) => item.blockId as WorkspaceBlockId);
 
   if (!blueprint.objectiveIds.includes(OBJECTIVES.resistance)) {
     errors.push("The trusted resistance objective is missing.");
   }
-  if (selected.length > maximumSteps(request)) {
-    errors.push(`The plan exceeds the ${maximumSteps(request)}-step limit.`);
+  if (selected.length > maximumSteps(request)) errors.push("The plan exceeds the step limit.");
+  if (new Set(selected).size !== selected.length) errors.push("A block may not appear more than once.");
+
+  for (const sourceId of [...blueprint.preserveSourceBlockIds, ...blueprint.delaySourceBlockIds]) {
+    if (!textbookBlockIds.has(sourceId as TextbookBlockId)) errors.push(`Unknown textbook source block: ${sourceId}.`);
   }
-  if (new Set(selected).size !== selected.length) {
-    errors.push("A block may not appear more than once.");
+  if (new Set(blueprint.preserveSourceBlockIds).size !== blueprint.preserveSourceBlockIds.length) {
+    errors.push("Preserved source blocks may not be duplicated.");
+  }
+  if (new Set(blueprint.delaySourceBlockIds).size !== blueprint.delaySourceBlockIds.length) {
+    errors.push("Delayed source blocks may not be duplicated.");
   }
 
   for (const blockId of selected) {
-    const block = adaptiveBlockCatalogById.get(blockId);
+    const block = workspaceBlockCatalogById.get(blockId);
     if (!block) {
-      errors.push(`Unknown block: ${blockId}.`);
+      errors.push(`Unknown interactive block: ${blockId}.`);
       continue;
     }
-    if (!candidateIds.has(blockId)) errors.push(`Block is not a legal candidate: ${blockId}.`);
+    if (!legal.has(blockId)) errors.push(`Block is not a legal candidate: ${blockId}.`);
     if (completed.has(blockId)) errors.push(`Completed block was selected again: ${blockId}.`);
-    for (const factId of block.sourceFactIds) {
-      if (!trustedFactIds.has(factId)) errors.push(`Block ${blockId} references an untrusted fact: ${factId}.`);
+    for (const sourceBlockId of block.sourceBlockIds) {
+      if (!textbookBlockIds.has(sourceBlockId)) errors.push(`Block ${blockId} references unknown source block ${sourceBlockId}.`);
+      const sourceBlock = resistanceSourceLesson.blocks.find((item) => item.id === sourceBlockId);
+      for (const factId of sourceBlock?.factIds ?? []) {
+        if (!trustedFactIds.has(factId)) errors.push(`Block ${blockId} references untrusted fact ${factId}.`);
+      }
     }
   }
-
-  const diagnosticIndex = selected.indexOf(IDS.diagnostic);
-  const graphIndex = selected.indexOf(IDS.graph);
-  const targetIndex = selected.indexOf(IDS.target);
-  const designIndex = selected.indexOf(IDS.design);
 
   if (request.phase === "initial") {
-    if (diagnosticIndex < 0) errors.push("The initial composition requires the resistance evidence checkpoint.");
-    if (graphIndex >= 0 && diagnosticIndex > graphIndex) errors.push("The graph cannot appear before the resistance checkpoint.");
+    const predictionIndex = selected.indexOf(IDS.prediction);
+    if (predictionIndex < 0 || predictionIndex > 1) errors.push("Initial composition must gather evidence within its first two steps.");
   }
-
   if (request.phase === "adapt" && needsSupport(request)) {
-    if (!selected.some((id) => id === IDS.misconception || id === IDS.guided)) {
-      errors.push("Support evidence requires a remediation or guided block.");
+    if (selected[0] !== IDS.compare || selected[1] !== IDS.retry) {
+      errors.push("Support recomposition must begin with comparison and guided retry.");
     }
-    const retryIndex = selected.indexOf(IDS.retry);
-    if (retryIndex < 0) errors.push("The support path requires an equivalent retry.");
-    if (graphIndex >= 0 && retryIndex > graphIndex) errors.push("The learner must retry before the graph appears.");
   }
-
-  if (request.phase === "adapt" && !needsSupport(request)) {
-    if (selected.some((id) => supportIds.has(id))) errors.push("Support blocks cannot be inserted after secure evidence.");
-    if (selected[0] !== IDS.graph) errors.push("Secure evidence should move first to the graph representation.");
+  if (request.phase === "adapt" && !needsSupport(request) && selected.some((id) => supportIds.has(id))) {
+    errors.push("Support blocks cannot follow secure evidence.");
   }
-
-  if (targetIndex >= 0 && graphIndex < 0 && !completed.has(IDS.graph)) {
-    errors.push("The target challenge requires the graph first.");
+  if (!applicationIds.has(selected.at(-1) as WorkspaceBlockId)) {
+    errors.push("The composition must finish with application or transfer.");
   }
-  if (designIndex >= 0 && targetIndex < 0 && !completed.has(IDS.target)) {
-    errors.push("The final design challenge requires the target challenge first.");
+  if (selected.includes(IDS.formula) && !blueprint.delaySourceBlockIds.includes("ohms-law")) {
+    errors.push("Ohm's law must stay delayed until the formula representation activates.");
   }
-  const finalId = selected.at(-1);
-  if (finalId !== IDS.target && finalId !== IDS.design) {
-    errors.push("The composition must finish with a registered application challenge.");
+  if (!blueprint.preserveSourceBlockIds.includes("concept-voltage")) {
+    errors.push("The fixed voltage source must remain visible in the workspace.");
   }
 
   return { valid: errors.length === 0, errors, blueprint };
 }
 
-const normalizedReasonByBlockId: Record<
-  string,
-  P3LessonBlueprint["remainingSteps"][number]["reasonCode"]
-> = {
-  [IDS.diagnostic]: "elicit-existing-model",
-  [IDS.misconception]: "respond-to-misconception",
-  [IDS.guided]: "test-through-manipulation",
-  [IDS.retry]: "elicit-existing-model",
+const normalizedReasonByBlockId: Record<WorkspaceBlockId, P3LessonBlueprint["remainingSteps"][number]["reasonCode"]> = {
+  [IDS.prediction]: "elicit-existing-model",
+  [IDS.manipulate]: "test-through-manipulation",
   [IDS.graph]: "offer-alternate-representation",
+  [IDS.compare]: "respond-to-misconception",
+  [IDS.retry]: "test-through-manipulation",
+  [IDS.formula]: "connect-observation-to-symbols",
   [IDS.target]: "confirm-transfer",
-  [IDS.design]: "increase-challenge",
+  [IDS.transfer]: "confirm-transfer",
 };
 
-/**
- * Ollama owns the interesting choice of blocks and their order. The application
- * owns the controlled vocabulary used to explain those choices, keeping the
- * teacher-facing trace short, consistent, and free of invented lesson copy.
- */
 export function normalizeP3Blueprint(
   blueprint: P3LessonBlueprint,
   request: P3ComposeRequest,
 ): P3LessonBlueprint {
   const remainingSteps = blueprint.remainingSteps.map((item) => ({
     blockId: item.blockId,
-    reasonCode: normalizedReasonByBlockId[item.blockId] ?? item.reasonCode,
+    reasonCode: normalizedReasonByBlockId[item.blockId as WorkspaceBlockId] ?? item.reasonCode,
   }));
-
-  let compositionSummary: string;
-  if (request.phase === "adapt" && needsSupport(request)) {
-    compositionSummary = "The learner evidence called for support, so Ollama inserted visual clarification, guided manipulation, and a retry before application.";
-  } else if (request.phase === "adapt") {
-    compositionSummary = "Secure evidence let Ollama move directly to a graph representation and an application challenge.";
-  } else {
-    compositionSummary = `Ollama selected and ordered ${remainingSteps.length} verified interactions to turn the trusted source lesson into an object-led path.`;
-  }
-
+  const compositionSummary = request.phase === "adapt" && needsSupport(request)
+    ? "The learner evidence called for support, so the composer inserted a comparison and guided retry before application."
+    : request.phase === "adapt"
+      ? "Secure evidence let the composer skip support and move directly to a generated graph, symbols, and application."
+      : `The composer selected ${remainingSteps.length} approved representations and preserved the voltage reference while delaying symbolic explanation.`;
   return { ...blueprint, remainingSteps, compositionSummary };
 }
 
 export function buildOllamaPrompt(request: P3ComposeRequest) {
   const candidateIds = getP3CandidateBlockIds(request);
-  const catalog = adaptiveBlockCatalog
+  const legalCandidates = workspaceBlockCatalog
     .filter((block) => candidateIds.includes(block.id))
     .map((block) => ({
       id: block.id,
-      title: block.title,
-      purpose: block.purpose,
-      role: block.selectionRole,
+      sourceBlockIds: block.sourceBlockIds,
       interactionType: block.interactionType,
-      modality: block.modality,
       estimatedMinutes: block.estimatedMinutes,
-      sourceFactIds: block.sourceFactIds,
+      role: block.role,
     }));
 
   return JSON.stringify({
-    task: "Compose the unfinished portion of an interactive lesson using only the supplied trusted block IDs. Return JSON only. Do not write educational content or frontend code.",
     phase: request.phase,
     goal: request.goal,
     depthMinutes: request.depth,
-    trustedLesson: {
+    sourceLesson: {
       id: resistanceSourceLesson.id,
       objectiveIds: resistanceSourceLesson.objectiveIds,
-      facts: resistanceSourceLesson.facts,
+      blocks: resistanceSourceLesson.blocks.map(({ id, page, factIds }) => ({ id, page, factIds })),
     },
-    learnerEvidence: request.lastOutcome ?? null,
+    learnerState: request.learnerState,
     completedBlockIds: request.completedBlockIds,
-    legalCandidates: catalog,
+    legalCandidates,
     constraints: {
       maximumSteps: maximumSteps(request),
-      initialMustInclude: request.phase === "initial" ? IDS.diagnostic : null,
-      supportRequired: request.phase === "adapt" ? needsSupport(request) : false,
-      finishWith: [IDS.target, IDS.design],
       useOnlyLegalCandidateIds: true,
-      keepCompositionSummaryUnderCharacters: 260,
+      requireEvidenceWithinFirstTwoSteps: request.phase === "initial",
+      doNotRepeatCompletedBlocks: true,
+      finishWithApplicationOrTransfer: true,
+      preserveSourceBlockIdsMustInclude: ["concept-voltage"],
+      delaySymbolicSourceUntilEvidence: ["ohms-law", "worked-example"],
+      outputOnlyTheP3_2Blueprint: true,
+      mayNotSpecify: ["CSS", "coordinates", "component names", "educational copy", "arbitrary properties"],
+    },
+    requiredOutputShape: {
+      blueprintVersion: "p3-2",
+      sourceLessonId: P3_SOURCE_LESSON_ID,
+      objectiveIds: [OBJECTIVES.resistance],
+      preserveSourceBlockIds: ["textbook block IDs"],
+      delaySourceBlockIds: ["textbook block IDs"],
+      remainingSteps: [{ blockId: "legal candidate ID", reasonCode: "approved reason code" }],
+      approvedReasonCodes: [
+        "elicit-existing-model",
+        "test-through-manipulation",
+        "offer-alternate-representation",
+        "respond-to-misconception",
+        "connect-observation-to-symbols",
+        "increase-challenge",
+        "confirm-transfer",
+      ],
+      compositionSummary: "under 300 characters",
     },
   });
+}
+
+export function parseOllamaBlueprintContent(content: string): unknown {
+  const trimmed = content
+    .trim()
+    .replace(/^\`\`\`(?:json)?\s*/i, "")
+    .replace(/\s*\`\`\`$/i, "");
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("Ollama returned no JSON object.");
+    return JSON.parse(trimmed.slice(start, end + 1));
+  }
 }

@@ -1,20 +1,37 @@
 # AI-Assembled Interactive Learning Environment
 
+Prototype 5 is available at `/prototype-5`. It adds a source-grounded lesson compiler before the constrained learning composer. See [PROTOTYPE_5.md](./PROTOTYPE_5.md).
+
 ## Prototype routes
 
 - `/` — Prototype 1: the original static experience and visual concept.
 - `/prototype-2` — Prototype 2: deterministic adaptation from learner evidence.
 - `/prototype-3` — Prototype 3: constrained lesson composition with the local
   Ollama model and a verified offline fallback.
+- `/prototype-4` — Prototype 4: one constrained recomposition engine shared by
+  trusted circuits and cell-membrane lessons.
+- `/prototype-4/evaluation` — the separate twelve-scenario local-model evaluator.
+- `/prototype-5` — Prototype 5: source-grounded analysis, human approval,
+  deterministic block compilation, and adaptive lesson composition.
+- `/prototype-5/evaluation` — the dual-model source and representation evaluator.
 
 Prototype 3 keeps the learning area object-first and uses AI only to select and
 sequence registered block IDs. See [PROTOTYPE_3.md](./PROTOTYPE_3.md) for its
 architecture, local Ollama instructions, demonstration path, and deployment
 limitation.
 
+Prototype 4 separates the engine from subject content and adds provider-neutral
+composition, evidence-derived learner state, cross-subject validation, and a
+second structurally different workspace. See [PROTOTYPE_4.md](./PROTOTYPE_4.md).
+
 ## Project status
 
-The current teacher-presentation build is a static Prototype 1 demonstration. It implements:
+The repository now contains five isolated prototypes. Prototype 1 preserves the
+original teacher-presentation experience; Prototypes 2–5 progressively prove
+adaptation, constrained composition, cross-subject reuse, and source-grounded
+lesson compilation.
+
+The original presentation build implements:
 
 - A five-step learner path assembled from human-authored, registered circuits blocks
 - Typed catalog and structured lesson-blueprint contracts
@@ -25,7 +42,9 @@ The current teacher-presentation build is a static Prototype 1 demonstration. It
 
 The teaching order for this build is **experience → notice → name → explain → connect → apply**. Terms appear only after the learner has experienced the thing being named, and `I = V ÷ R` is withheld until the final block.
 
-This presentation build contains no model call, API key, database, or runtime server endpoint. Its branching and composition are deliberately scripted so teachers can evaluate the learning-interface idea before AI is introduced.
+Prototype 1 contains no model call, API key, database, or runtime server
+endpoint. Later prototypes add optional local Ollama calls while retaining
+validated deterministic fallbacks where appropriate. No API key is committed.
 
 Do not begin broad product development until Prototype 1 passes its full acceptance gate.
 
@@ -35,7 +54,7 @@ This README is the project's source of truth. Future implementation decisions sh
 
 The project is not primarily a chatbot, an AI tutor that generates explanations, or a traditional adaptive-learning website with an AI hint feature.
 
-## Run the current prototype
+## Run the prototypes
 
 Codex can run the project with its bundled Node.js runtime, so no system-wide installation is required while developing through Codex.
 
@@ -46,7 +65,8 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000` for Prototype 1 or
+`http://localhost:3000/prototype-5` for the latest prototype.
 
 Useful verification commands:
 
@@ -56,7 +76,11 @@ pnpm test
 pnpm build
 ```
 
-The current build is entirely static. It assembles a verified local blueprint in the browser and requires no environment variables. A constrained model composer remains a future competition-development step, after the educational flow and block vocabulary have been reviewed.
+Prototype 1 remains entirely static. Prototype 5 can run its deterministic
+interfaces without a cloud API, while its analyzer and representation planner
+currently use the optional local Ollama models documented in
+[PROTOTYPE_5.md](./PROTOTYPE_5.md). A future cloud provider can be added behind
+the existing interfaces without exposing a key in the browser.
 
 ## Core concept
 

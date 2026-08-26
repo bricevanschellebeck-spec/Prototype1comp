@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "p4:evaluate": "node scripts/evaluate-prototype4.mjs",
+    "p5:evaluate": "node scripts/evaluate-prototype5.mjs"
   },
   "dependencies": {
     "next": "16.2.11",

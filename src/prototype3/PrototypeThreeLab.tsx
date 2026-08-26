@@ -672,7 +672,6 @@ export function PrototypeThreeLab() {
             depthLabel={depthLabel}
             initialComposition={composition}
             onAdjust={returnToSetup}
-            onCompareTextbook={() => setStage("textbook")}
           />
         ) : null}
       </main>

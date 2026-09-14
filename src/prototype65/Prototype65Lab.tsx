@@ -5,6 +5,7 @@ import { ActivityDock } from "./ActivityDock";
 import { ContextAssistant } from "./ContextAssistant";
 import { chooseSmallestAdaptation, deriveUnderstanding } from "./evidence";
 import { activityPath, findActivity, goldLessons } from "./lessons";
+import { LivingReferenceCompanion } from "./LivingReferenceCompanion";
 import { PersistentLearningScene, type SceneState } from "./Scenes";
 import { sceneForActivity } from "./runtime";
 import { BeforeTextbook, ReferenceDrawer } from "./ReferenceDrawer";
@@ -49,6 +50,13 @@ export function Prototype65Lab() {
   const [reference, setReference] = useState<LivingReference>(() => emptyLivingReference(goldLessons[0]));
   const [referenceNotice, setReferenceNotice] = useState("");
   const referenceNoticeTimer = useRef<number | undefined>(undefined);
+  const referenceEventTimer = useRef<number | undefined>(undefined);
+  const objectNoticeTimer = useRef<number | undefined>(undefined);
+  const [inspectedObjectId, setInspectedObjectId] = useState<string | null>(null);
+  const [referenceHighlightObjectId, setReferenceHighlightObjectId] = useState<string | null>(null);
+  const [seenObjectIds, setSeenObjectIds] = useState<string[]>([]);
+  const [newObjectId, setNewObjectId] = useState<string | null>(null);
+  const [referenceEventSectionId, setReferenceEventSectionId] = useState<string | null>(null);
   const [scene, setScene] = useState<SceneState>(initialScene);
   const [adaptation, setAdaptation] = useState<AdaptationDecision | null>(null);
   const [referenceOpen, setReferenceOpen] = useState(false);
@@ -71,7 +79,7 @@ export function Prototype65Lab() {
     const path = activityPath(lesson, nextGoal, nextDepth);
     const nextScene = initialScene();
     if (lesson.id === "circuits" && path[0]?.interaction !== "close-circuit") nextScene.circuits.closed = true;
-    setActivityIds(path.map((item) => item.id)); setActivityIndex(0); setCompleted([]); setEvidence([]); setReference(emptyLivingReference(lesson)); setReferenceNotice(""); setScene(nextScene); setAdaptation(null); setAssistantMessage("");
+    setActivityIds(path.map((item) => item.id)); setActivityIndex(0); setCompleted([]); setEvidence([]); setReference(emptyLivingReference(lesson)); setReferenceNotice(""); setInspectedObjectId(null); setReferenceHighlightObjectId(null); setSeenObjectIds([]); setNewObjectId(null); setReferenceEventSectionId(null); setScene(nextScene); setAdaptation(null); setAssistantMessage("");
     advanceScreen("workspace");
   }
   function record(outcome: EvidenceEvent) {
@@ -82,6 +90,12 @@ export function Prototype65Lab() {
     const hasPriorGap = evidence.some((item) => item.result === "misconception" && item.conceptIds.some((conceptId) => activity.conceptIds.includes(conceptId)));
     const referenceUpdate = addReferenceKnowledge({ reference, lesson, activity, event: outcome, goal, depth, hasPriorGap, scene: activeScene });
     setReference(referenceUpdate.reference);
+    const eventSectionId = activity.interaction === "close-circuit" ? referenceUpdate.updatedSectionIds[0] : referenceUpdate.updatedSectionIds.at(-1);
+    if (eventSectionId) {
+      setReferenceEventSectionId(eventSectionId);
+      if (referenceEventTimer.current) window.clearTimeout(referenceEventTimer.current);
+      referenceEventTimer.current = window.setTimeout(() => setReferenceEventSectionId(null), goal === "understand" ? 6200 : 3600);
+    }
     if (referenceUpdate.addedSectionIds.length) {
       setReferenceNotice(`Added to My lesson · ${referenceUpdate.addedSectionIds.length} new ${referenceUpdate.addedSectionIds.length === 1 ? "section" : "sections"}`);
       if (referenceNoticeTimer.current) window.clearTimeout(referenceNoticeTimer.current);
@@ -109,6 +123,14 @@ export function Prototype65Lab() {
     }
     window.setTimeout(() => setActivityIndex((index) => index + 1), 720);
   }
+  function inspectObject(objectId: string | null) {
+    setInspectedObjectId(objectId);
+    if (!objectId || seenObjectIds.includes(objectId)) return;
+    setSeenObjectIds((before) => before.includes(objectId) ? before : [...before, objectId]);
+    setNewObjectId(objectId);
+    if (objectNoticeTimer.current) window.clearTimeout(objectNoticeTimer.current);
+    objectNoticeTimer.current = window.setTimeout(() => setNewObjectId(null), 1800);
+  }
   function assistant(kind: "confused" | "why" | "alternate") {
     if (!activity) return;
     if (kind === "confused") {
@@ -122,7 +144,7 @@ export function Prototype65Lab() {
       setScene((before) => ({ ...before, circuits: { ...before.circuits, comparisonVisible: true }, history: { ...before.history, sourceSupportVisible: true } }));
     }
   }
-  function reset() { setScreen("subject"); setActivityIds([]); setActivityIndex(0); setCompleted([]); setEvidence([]); setReference(emptyLivingReference(lesson)); setReferenceNotice(""); setScene(initialScene()); }
+  function reset() { setScreen("subject"); setActivityIds([]); setActivityIndex(0); setCompleted([]); setEvidence([]); setReference(emptyLivingReference(lesson)); setReferenceNotice(""); setInspectedObjectId(null); setReferenceHighlightObjectId(null); setSeenObjectIds([]); setNewObjectId(null); setReferenceEventSectionId(null); setScene(initialScene()); }
 
   if (screen !== "workspace") return <main className={`${styles.setup} ${transitioning ? styles.leaving : ""}`}>
     <header><Brand/><span>Gold-standard learning experiences · no AI required</span></header>
@@ -133,13 +155,14 @@ export function Prototype65Lab() {
   </main>;
 
   return <main className={`${styles.workspace} ${styles[lesson.palette]}`}>
-    <header className={styles.workspaceHeader}><div><Brand/><span>{lesson.subject} · {goal} · {depth}</span></div><nav><select aria-label="Switch demo profile" value={demoProfiles.some((profile) => profile.goal === goal && profile.depth === depth) ? `${goal}:${depth}` : ""} onChange={(event) => { const profile = demoProfiles.find((candidate) => `${candidate.goal}:${candidate.depth}` === event.target.value); if (profile) begin(profile.depth, profile.goal); }}><option value="" disabled>Switch demo mode</option>{demoProfiles.map((profile) => <option key={`${profile.goal}:${profile.depth}`} value={`${profile.goal}:${profile.depth}`}>{profile.label}</option>)}</select>{isComplete ? <button onClick={() => setBeforeOpen(true)}>Fixed textbook demo</button> : null}<button className={styles.referenceButton} data-new={Boolean(referenceNotice)} disabled={!canOpenReference} title={canOpenReference ? "Open the reference built from this lesson" : "Reference opens after this assessment response"} onClick={() => setReferenceOpen(true)}>My lesson <b>{reference.sections.length}</b>{!canOpenReference ? <small>locked</small> : null}</button><button onClick={reset}>Start again</button></nav></header>
+    <header className={styles.workspaceHeader}><div><Brand/><span>{lesson.subject} · {goal} · {depth}</span></div><nav><select aria-label="Switch demo profile" value={demoProfiles.some((profile) => profile.goal === goal && profile.depth === depth) ? `${goal}:${depth}` : ""} onChange={(event) => { const profile = demoProfiles.find((candidate) => `${candidate.goal}:${candidate.depth}` === event.target.value); if (profile) begin(profile.depth, profile.goal); }}><option value="" disabled>Switch demo mode</option>{demoProfiles.map((profile) => <option key={`${profile.goal}:${profile.depth}`} value={`${profile.goal}:${profile.depth}`}>{profile.label}</option>)}</select>{isComplete ? <button onClick={() => setBeforeOpen(true)}>Fixed textbook demo</button> : null}<button onClick={reset}>Start again</button></nav></header>
     <section className={styles.canvasArea}>
-      <div className={styles.sceneArea}><PersistentLearningScene subjectId={lesson.id} lesson={lesson} goal={goal} depth={depth} state={activeScene} activeActivity={activity} adaptation={adaptation} completedActivityIds={completed}/>
+      <div className={styles.sceneArea}><PersistentLearningScene subjectId={lesson.id} lesson={lesson} goal={goal} depth={depth} state={activeScene} activeActivity={activity} adaptation={adaptation} completedActivityIds={completed} inspectedObjectId={inspectedObjectId ?? referenceHighlightObjectId} onInspectObject={inspectObject}/>
         <div className={styles.evidenceTrail}><small>{goal === "curious" ? "WHAT YOU DISCOVERED" : goal === "revise" ? "WHAT YOU REFRESHED" : goal === "test" ? "YOUR RESPONSES" : "WHAT YOU HAVE BUILT"}</small>{evidence.slice(-4).map((item) => <span key={`${item.activityId}-${item.detail}`} data-result={item.result}>{item.detail}</span>)}</div>
         {referenceNotice ? <div className={styles.referenceNotice} role="status">{referenceNotice}</div> : null}
         <aside className={styles.learningRail}>{isComplete ? <div className={styles.conclusion}><small>YOUR LEARNING JOURNEY</small><h1>{goal === "test" ? "Your readiness evidence is ready." : goal === "revise" ? "You refreshed what needed attention." : goal === "curious" ? "You found the idea through the object." : "You built an explanation—not just a score."}</h1><section><span>{goal === "test" ? "What the check covered" : "What you discovered"}</span>{reference.sections.map((section) => <p key={section.id}>{section.title}</p>)}</section><section><span>Evidence of understanding</span>{understanding.filter((item) => item.observations.length).map((item) => <p key={item.conceptId} data-state={item.state}>{lesson.concepts.find((concept) => concept.id === item.conceptId)?.label} · {item.state}</p>)}</section><section><span>What you did</span><p>{completed.map((id) => findActivity(lesson,id)?.family.replaceAll("-"," ")).filter(Boolean).join(" · ")}</p></section><button onClick={() => setReferenceOpen(true)}>Open the lesson you built →</button></div> : activity ? <ActivityDock key={activity.id} activity={activity} goal={goal} depth={depth} scene={activeScene} setScene={setScene} onFinish={record}/> : null}</aside>
         <div className={styles.activityPosition}><span>{Math.min(activityIndex + 1, activityIds.length)} / {activityIds.length}</span><div>{activityIds.map((id,index) => <i key={id} data-state={index < activityIndex ? "complete" : index === activityIndex ? "active" : "future"}/>)}</div></div>
+        <LivingReferenceCompanion lesson={lesson} goal={goal} activity={activity} scene={activeScene} reference={reference} previewObjectId={inspectedObjectId} newObjectId={newObjectId} eventSectionId={referenceEventSectionId} locked={!canOpenReference} onOpenFullReference={() => setReferenceOpen(true)} onHighlightObject={setReferenceHighlightObjectId}/>
       </div>
     </section>
     <ContextAssistant lesson={lesson} activity={activity} message={assistantMessage} branchOpen={branchOpen} onConfused={() => assistant("confused")} onWhy={() => assistant("why")} onAlternate={() => assistant("alternate")} onBranch={() => setBranchOpen(true)} onCloseBranch={() => setBranchOpen(false)}/>

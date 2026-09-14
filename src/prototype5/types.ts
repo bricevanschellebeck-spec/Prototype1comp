@@ -168,6 +168,7 @@ export type CompiledBlock = {
 };
 
 export type CompiledLessonManifest = {
+  compilationReceipt?: string;
   schemaVersion: "p5-compiled-lesson-1";
   id: string;
   sourceDocumentId: string;

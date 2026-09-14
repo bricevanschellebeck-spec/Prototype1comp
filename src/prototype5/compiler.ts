@@ -7,12 +7,10 @@ function titleFor(source: SourceDocument, proposal: RepresentationProposal) {
   const tableId = "tableId" in config ? config.tableId : undefined;
   const table = tableId ? source.tables.find((item) => item.id === tableId) : undefined;
   const inputColumnId = config.kind === "parameter-experiment" ? config.inputColumnId : config.kind === "data-plot" ? config.xColumnId : undefined;
-  const outputColumnId = config.kind === "data-plot" ? config.yColumnId : undefined;
   const inputLabel = table?.columns.find((column) => column.id === inputColumnId)?.label.toLowerCase();
-  const outputLabel = table?.columns.find((column) => column.id === outputColumnId)?.label.toLowerCase();
   const labels: Record<string, string> = {
-    prediction: "Predict the pattern", "parameter-experiment": `Change ${inputLabel ?? "one source value"}`, comparison: "Compare trusted trials", "data-plot": inputLabel && outputLabel ? `Build the ${inputLabel} / ${outputLabel} graph` : "Build the evidence graph",
-    classification: "Classify the evidence", "step-sequence": "Order the mechanism", "evidence-reveal": "Name the rule", "target-challenge": "Apply it to a held-out trial",
+    prediction: "Predict the pattern", "parameter-experiment": `Change ${inputLabel ?? "one source value"}`, comparison: "Compare trusted trials", "data-plot": "Build the evidence graph",
+    classification: "Classify the evidence", "step-sequence": "Order the mechanism", "evidence-reveal": "Name the rule", "target-challenge": "Predict the final trial",
   };
   return labels[proposal.primitiveId];
 }
@@ -57,7 +55,23 @@ export function compileApprovedLesson(specCandidate: unknown, planCandidate: unk
       possibleMisconceptionIds: spec.misconceptions.filter((item) => item.relatedObjectiveIds.includes(objectivePlan.objectiveId)).map((item) => item.id), render: proposal.factoryConfig,
     });
   }
+  if (allowed) {
+    const proposalIds = new Set(plan.objectivePlans.flatMap((item) => item.proposals.map((proposal) => proposal.tempId)));
+    if ([...allowed].some((id) => !proposalIds.has(id))) return { errors: ["Approval references an unknown proposal."] };
+  }
+  for (const table of source.tables) {
+    const reserved = new Set(blocks.flatMap((block) => block.render.kind === "target-challenge" && block.render.tableId === table.id ? [block.render.heldOutRowId] : []));
+    if (reserved.size && table.rows.length - reserved.size < 2) return { errors: ["Keep at least two observed trials besides the reserved challenge trials."] };
+  }
   if (!blocks.length) return { errors: ["Approve at least one representation proposal."] };
+  if (!blocks.some((block) => ["comparison", "parameter-experiment", "evidence-reveal"].includes(block.primitiveId) || block.role === "support")) return { errors: ["Approve at least one experiment, comparison or explanation so the learner can test a prediction and receive support."] };
+  for (const block of blocks) {
+    if (block.render.kind === "comparison") {
+      const config = block.render;
+      const reserved = new Set(blocks.flatMap((item) => item.render.kind === "target-challenge" && item.render.tableId === config.tableId ? [item.render.heldOutRowId] : []));
+      if (config.rowIds.filter((id) => !reserved.has(id)).length < 2) return { errors: ["A comparison needs two observed trials besides the reserved challenge trial."] };
+    }
+  }
   if (!blocks.some((block) => block.role === "evidence")) return { errors: ["The compiled lesson needs an approved evidence block."] };
   if (!blocks.some((block) => block.role === "apply" || block.role === "transfer")) return { errors: ["The compiled lesson needs an approved apply or transfer block."] };
   const sorted = [...blocks].sort((a, b) => rankRole(a.role) - rankRole(b.role));

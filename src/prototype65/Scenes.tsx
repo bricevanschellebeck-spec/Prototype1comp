@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type ComponentType } from "react";
-import { detailParts, informationDensity, objectKnowledgeState, shouldRevealContext } from "./information";
+import { type ComponentType } from "react";
+import { objectKnowledgeState, shouldRevealContext } from "./information";
 import { learnerEvidenceVisible } from "./runtime";
 import type { AdaptationDecision, GoldLesson, P65Activity, P65Depth, P65Goal, P65SubjectId } from "./types";
 import styles from "./prototype65.module.css";
@@ -36,37 +36,29 @@ type SceneProps = {
   activeActivity?: P65Activity;
   adaptation: AdaptationDecision | null;
   completedActivityIds: string[];
+  inspectedObjectId: string | null;
+  onInspectObject: (objectId: string | null) => void;
 };
 
-function ObjectInformation({ lesson, activity, completedActivityIds, goal, depth, guidanceLevel, actionObserved = false, objectId, value, className, highlighted, openId, setOpenId }: {
+function ObjectInformation({ lesson, activity, completedActivityIds, actionObserved = false, objectId, value, className, highlighted, inspectedObjectId, onInspectObject }: {
   lesson: GoldLesson;
   activity?: P65Activity;
   completedActivityIds: string[];
-  goal: P65Goal;
-  depth: P65Depth;
-  guidanceLevel: number;
   actionObserved?: boolean;
   objectId: string;
   value?: string;
   className: string;
   highlighted?: boolean;
-  openId: string | null;
-  setOpenId: (id: string | null) => void;
+  inspectedObjectId: string | null;
+  onInspectObject: (objectId: string | null) => void;
 }) {
   const detail = lesson.objectDetails.find((candidate) => candidate.id === objectId);
   const knowledge = objectKnowledgeState(objectId, lesson, activity, completedActivityIds, actionObserved);
   if (!detail || knowledge === "future") return null;
-  const density = informationDensity(goal, depth, guidanceLevel);
-  const detailKey = `${activity?.id ?? "scene"}:${objectId}`;
-  const isOpen = openId === detailKey;
-  return <div className={`${styles.objectLabel} ${className}`} data-object={objectId} data-knowledge={knowledge} data-highlight={highlighted || knowledge === "active"}>
+  const inspecting = inspectedObjectId === objectId;
+  return <div className={`${styles.objectLabel} ${className}`} data-object={objectId} data-knowledge={knowledge} data-highlight={highlighted || knowledge === "active" || inspecting} onMouseEnter={() => onInspectObject(objectId)} onMouseLeave={() => onInspectObject(null)}>
     <div className={styles.objectIdentity}><small>{detail.label}</small>{value ? <strong>{value}</strong> : null}</div>
-    <button className={styles.explainObject} onClick={() => setOpenId(isOpen ? null : detailKey)} aria-expanded={isOpen}>{knowledge === "active" ? "Explain this" : "?"}</button>
-    {isOpen ? <aside className={styles.objectDetail} aria-label={`More about ${detail.label}`}>
-      <header><small>MICRO REVEAL</small><strong>{detail.label}{value ? ` · ${value}` : ""}</strong><button onClick={() => setOpenId(null)} aria-label={`Close ${detail.label} detail`}>×</button></header>
-      {detailParts(density, detail).map((part) => <p key={part.label}><b>{part.label}</b>{part.text}</p>)}
-      <footer>{density === "glance" ? "Quick detail" : density === "guided" ? "Learn-it detail" : "Go-deep detail"}</footer>
-    </aside> : null}
+    <button className={styles.explainObject} onFocus={() => onInspectObject(objectId)} onBlur={() => onInspectObject(null)} onClick={() => onInspectObject(objectId)} aria-label={`Show ${detail.label} in the mini textbook`}>{knowledge === "active" ? "Read" : "?"}</button>
   </div>;
 }
 
@@ -77,8 +69,7 @@ function ContextualExplanation({ activity, visible }: { activity?: P65Activity; 
   </div>;
 }
 
-function CircuitContinuum({ lesson, goal, depth, state, activeActivity, adaptation, completedActivityIds }: SceneProps) {
-  const [openDetailId, setOpenDetailId] = useState<string | null>(null);
+function CircuitContinuum({ lesson, goal, state, activeActivity, adaptation, completedActivityIds, inspectedObjectId, onInspectObject }: SceneProps) {
   const circuit = state.circuits;
   const current = circuit.closed ? circuit.voltage / circuit.resistance : 0;
   const evidenceVisible = learnerEvidenceVisible(activeActivity, circuit.assessmentEvidenceRevealed);
@@ -112,11 +103,11 @@ function CircuitContinuum({ lesson, goal, depth, state, activeActivity, adaptati
       <path className={styles.filament} d="m554 330 22-22 22 22-22 22z"/>
       {circuit.closed ? <path className={styles.chargeFlow} style={{ animationDuration: `${speed}s` }} d="M135 82H310L336 52l34 60 34-60 34 60 34-60 28 30H714V330H135V82"/> : null}
     </svg>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={circuit.guidanceLevel} actionObserved={actionObserved} objectId="battery" value={`${circuit.voltage} V`} className={styles.batteryLabel} highlighted={activeActivity?.information.activeObjectIds.includes("battery") || circuit.guidanceLevel >= 1} openId={showVoltageConcept ? null : openDetailId} setOpenId={setOpenDetailId}/>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={circuit.guidanceLevel} actionObserved={actionObserved} objectId="switch" className={styles.switchLabel} highlighted={activeActivity?.information.activeObjectIds.includes("switch")} openId={showVoltageConcept ? null : openDetailId} setOpenId={setOpenDetailId}/>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={circuit.guidanceLevel} actionObserved={actionObserved} objectId="lamp" className={styles.lampLabel} openId={showVoltageConcept ? null : openDetailId} setOpenId={setOpenDetailId}/>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={circuit.guidanceLevel} actionObserved={actionObserved} objectId="resistor" value={`${circuit.resistance} Ω`} className={styles.resistorLabel} highlighted={activeActivity?.information.activeObjectIds.includes("resistor")} openId={showVoltageConcept ? null : openDetailId} setOpenId={setOpenDetailId}/>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={circuit.guidanceLevel} actionObserved={actionObserved} objectId="current-path" value={`${current.toFixed(2)} A`} className={styles.currentLabel} highlighted={activeActivity?.information.activeObjectIds.includes("current-path")} openId={showVoltageConcept ? null : openDetailId} setOpenId={setOpenDetailId}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="battery" value={`${circuit.voltage} V`} className={styles.batteryLabel} highlighted={activeActivity?.information.activeObjectIds.includes("battery") || circuit.guidanceLevel >= 1} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="switch" className={styles.switchLabel} highlighted={activeActivity?.information.activeObjectIds.includes("switch")} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="lamp" className={styles.lampLabel} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="resistor" value={`${circuit.resistance} Ω`} className={styles.resistorLabel} highlighted={activeActivity?.information.activeObjectIds.includes("resistor")} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="current-path" value={`${current.toFixed(2)} A`} className={styles.currentLabel} highlighted={activeActivity?.information.activeObjectIds.includes("current-path")} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
     <ContextualExplanation activity={activeActivity} visible={showContext}/>
     {showUnderstandChain ? <div className={styles.circuitCausalChain}><small>WHAT CHANGED — AND WHY</small><div><span>Switch closes</span><i>→</i><span>Path completes</span><i>→</i><span>Current flows</span><i>→</i><span>Lamp responds</span></div></div> : null}
     {showVoltageConcept ? <aside className={styles.conceptReveal} aria-label="Voltage concept reveal"><small>CONCEPT REVEAL</small><h3>Voltage</h3><p>Voltage is the electrical push that drives current.</p><dl>{circuit.voltageObservations.map((voltage) => <div key={voltage}><dt>{voltage} V</dt><dd>→ {(voltage / circuit.resistance).toFixed(2)} A</dd></div>)}</dl><strong>Higher voltage → greater current</strong><span>You discovered this while resistance stayed fixed at {circuit.resistance} Ω.</span></aside> : null}
@@ -134,8 +125,7 @@ const historyEvents = [
   { year: "1969", title: "Apollo 11", note: "Humans land on the Moon" },
 ];
 
-function HistoryContinuum({ lesson, goal, depth, state, activeActivity, adaptation, completedActivityIds }: SceneProps) {
-  const [openDetailId, setOpenDetailId] = useState<string | null>(null);
+function HistoryContinuum({ lesson, goal, state, activeActivity, adaptation, completedActivityIds, inspectedObjectId, onInspectObject }: SceneProps) {
   const history = state.history;
   const visibleCount = Math.max(history.revealedEvents, activeActivity?.id === "h-timeline" ? 1 : 4);
   const actionObserved = activeActivity?.interaction === "inspect-timeline" ? history.revealedEvents > 0
@@ -148,11 +138,11 @@ function HistoryContinuum({ lesson, goal, depth, state, activeActivity, adaptati
     <div className={styles.sceneCaption}><small>LIVE ARCHIVE</small><strong>The road to the Moon</strong></div>
     <div className={styles.timelineLine} aria-hidden="true"/>
     <div className={styles.timelineEvents}>{historyEvents.map((event, index) => <article key={`${event.year}-${event.title}`} data-visible={index < visibleCount} data-active={activeActivity?.id === "h-timeline" && index === visibleCount - 1}><span>{event.year}</span><i/><strong>{event.title}</strong>{index < visibleCount && activeActivity?.id === "h-timeline" && index === visibleCount - 1 ? <small>{event.note}</small> : null}</article>)}</div>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={history.guidanceLevel} actionObserved={actionObserved} objectId="timeline" className={styles.historyTimelineLabel} highlighted={activeActivity?.information.activeObjectIds.includes("timeline")} openId={openDetailId} setOpenId={setOpenDetailId}/>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={history.guidanceLevel} actionObserved={actionObserved} objectId="event-markers" className={styles.historyObjectLabel} highlighted={activeActivity?.information.activeObjectIds.includes("event-markers")} openId={openDetailId} setOpenId={setOpenDetailId}/>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={history.guidanceLevel} actionObserved={actionObserved} objectId="cause-network" className={styles.historyObjectLabel} highlighted={activeActivity?.information.activeObjectIds.includes("cause-network")} openId={openDetailId} setOpenId={setOpenDetailId}/>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={history.guidanceLevel} actionObserved={actionObserved} objectId="source-fragments" className={styles.historyObjectLabel} highlighted={activeActivity?.information.activeObjectIds.includes("source-fragments")} openId={openDetailId} setOpenId={setOpenDetailId}/>
-    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} goal={goal} depth={depth} guidanceLevel={history.guidanceLevel} actionObserved={actionObserved} objectId="cause-chain" className={styles.historyObjectLabel} highlighted={activeActivity?.information.activeObjectIds.includes("cause-chain")} openId={openDetailId} setOpenId={setOpenDetailId}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="timeline" className={styles.historyTimelineLabel} highlighted={activeActivity?.information.activeObjectIds.includes("timeline")} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="event-markers" className={styles.historyObjectLabel} highlighted={activeActivity?.information.activeObjectIds.includes("event-markers")} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="cause-network" className={styles.historyObjectLabel} highlighted={activeActivity?.information.activeObjectIds.includes("cause-network")} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="source-fragments" className={styles.historyObjectLabel} highlighted={activeActivity?.information.activeObjectIds.includes("source-fragments")} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
+    <ObjectInformation lesson={lesson} activity={activeActivity} completedActivityIds={completedActivityIds} actionObserved={actionObserved} objectId="cause-chain" className={styles.historyObjectLabel} highlighted={activeActivity?.information.activeObjectIds.includes("cause-chain")} inspectedObjectId={inspectedObjectId} onInspectObject={onInspectObject}/>
     <ContextualExplanation activity={activeActivity} visible={showContext}/>
     <div className={styles.historyConnections} data-visible={history.causeConnected || completedActivityIds.includes("h-causes")}><svg viewBox="0 0 900 190" aria-hidden="true"><path d="M105 30C250 5 325 160 445 92S680 35 795 130"/><path d="m775 116 22 14-25 8"/></svg><span>Competition increased pressure</span><strong>Pressure → commitment → Moon landing</strong></div>
     {(activeActivity?.id === "h-source" || history.sourceSelected || history.sourceSupportVisible || adaptation?.insertActivityId === "h-source") ? <div className={styles.sourceFragments}><blockquote><small>SOURCE A · 1961</small>“We choose to go to the Moon…”<span>Public ambition</span></blockquote><blockquote data-direct><small>SOURCE B · 1962</small>“This generation’s answer to the challenge…”<span>Direct competition language</span></blockquote></div> : null}

@@ -14,6 +14,7 @@ export type RepresentationKind = "live-system" | "comparison" | "learner-data" |
 export type SceneTransition = "preserve" | "reveal" | "attach" | "compare" | "constrain" | "expand";
 export type InformationReveal = "immediate" | "after-action" | "after-struggle";
 export type ObjectKnowledgeState = "active" | "known" | "future";
+export type LivingReferenceState = "introduced" | "explored" | "established";
 
 export type LearningObjectDetail = {
   id: string;
@@ -89,6 +90,7 @@ export type ReferenceLearnerEvidence = {
 
 export type LivingReferenceSection = ReferenceSectionDefinition & {
   status: ReferenceContribution["status"];
+  referenceState: LivingReferenceState;
   canonicalKnowledge: ReferenceContribution[];
   learnerEvidence: ReferenceLearnerEvidence[];
   representations: NonNullable<ReferenceContribution["representations"]>;

@@ -4,6 +4,10 @@ import { compileApprovedLesson } from "./compiler";
 import { validateAnalysisDraft, validateCitation, validateRepresentationPlan } from "./contracts";
 import { p5EvaluationFixtures } from "./evaluationFixtures";
 import { deterministicBlueprint } from "./composer";
+import { composeP5, validateBlueprint, validateCompiledManifest } from "./composer";
+import { sealCompilation } from "./compilationReceipt";
+import { explorationRows, predictionModel, validateEvidence } from "./learningRules";
+import { validateApprovedSpec } from "./contracts";
 import { reactionRateSource } from "./sources";
 import type { RepresentationPlanDraft, SourceAnalysisDraft } from "./types";
 
@@ -45,5 +49,69 @@ describe("Prototype 5 trust and compilation boundary", () => {
   it("keeps source-derived and pedagogical arrays structurally separate", () => {
     const candidate = { schemaVersion: "p5-analysis-1", sourceDocumentId: reactionRateSource.id, modelId: "test", sourceDerived: { concepts: [], facts: [], relationships: [], objectives: [] }, pedagogical: { objectives: [], proposedPrerequisites: [], suggestedMisconceptions: [] } };
     expect(validateAnalysisDraft(reactionRateSource, candidate).schemaValid).toBe(false);
+  });
+
+  it("rejects a changed or unsigned manifest at the composer boundary", () => {
+    const compiled = compileApprovedLesson(gold, approvedPlan).manifest!;
+    expect(validateCompiledManifest(compiled).errors).not.toEqual([]);
+    const signed = sealCompilation(compiled);
+    expect(validateCompiledManifest(JSON.parse(JSON.stringify(signed))).errors).toEqual([]);
+    signed.blocks[0].title = "Injected curriculum";
+    expect(validateCompiledManifest(signed).errors).not.toEqual([]);
+  });
+
+  it("keeps the reserved row out of the experiment and graph", () => {
+    const manifest = compileApprovedLesson(gold, approvedPlan).manifest!;
+    const rows = explorationRows(reactionRateSource, manifest, "concentration-time-table");
+    expect(rows).toHaveLength(3);
+    expect(rows.some((row) => row.id === "result-200")).toBe(false);
+  });
+
+  it("reads prediction meaning from its approved configuration, not incidental metadata", () => {
+    const manifest = compileApprovedLesson(gold, approvedPlan).manifest!;
+    manifest.blocks[0].relationshipIds = [];
+    const prediction = predictionModel(manifest, manifest.blocks[0]);
+    expect(prediction?.correct).toBe(manifest.relationships[0].type);
+    expect(prediction?.question).not.toContain("related outcome");
+  });
+
+  it("validates fallback paths for each depth and supported learner evidence", () => {
+    const manifest = compileApprovedLesson(gold, approvedPlan).manifest!;
+    for (const depth of [5, 15, 30] as const) {
+      for (const evidence of [[], [{ blockId: "generated.predict", result: "incorrect" as const, attempts: 1, hintUsed: false, misconceptionIds: [] }], [{ blockId: "generated.predict", result: "correct" as const, attempts: 2, hintUsed: true, misconceptionIds: [] }]]) {
+        const blueprint = deterministicBlueprint(manifest, depth, evidence);
+        expect(validateBlueprint(blueprint, manifest, depth, evidence).errors).toEqual([]);
+        if (evidence.length) expect(blueprint.remainingSteps[0].blockId).toBe("generated.experiment");
+      }
+    }
+  });
+
+  it("rejects forged and duplicate learner evidence before calling a model", async () => {
+    const manifest = sealCompilation(compileApprovedLesson(gold, approvedPlan).manifest!);
+    const item = { blockId: "generated.predict", result: "incorrect" as const, attempts: 1, hintUsed: false, misconceptionIds: ["invented"] };
+    expect(validateEvidence(manifest, [item, item]).length).toBeGreaterThan(1);
+    await expect(composeP5({ compiledManifest: manifest, goal: "understand", depthMinutes: 15, evidenceLog: [item] })).rejects.toThrow("unregistered misconception");
+  });
+
+  it("rejects duplicate canonical facts and unknown proposal approvals", () => {
+    const spec = structuredClone(gold); spec.facts.push(spec.facts[0]);
+    expect(validateApprovedSpec(reactionRateSource, spec).errors.join(" ")).toContain("Duplicate");
+    expect(compileApprovedLesson(gold, approvedPlan, ["predict", "experiment", "apply", "invented"]).errors.join(" ")).toContain("unknown proposal");
+  });
+
+  it("refuses to pretend that an unsupported relationship has a directional answer", () => {
+    const spec = structuredClone(gold); spec.relationships[0].type = "depends-on";
+    expect(validateRepresentationPlan(reactionRateSource, spec, approvedPlan).errors.join(" ")).toContain("Directional predictions");
+  });
+
+  it("rejects a challenge reservation that leaves no observations to learn from", () => {
+    const plan = structuredClone(approvedPlan);
+    for (const rowId of ["result-050", "result-100", "result-150"]) {
+      const proposal = structuredClone(plan.objectivePlans[0].proposals[3]);
+      proposal.tempId = rowId;
+      if (proposal.factoryConfig.kind === "target-challenge") proposal.factoryConfig.heldOutRowId = rowId;
+      plan.objectivePlans[0].proposals.push(proposal);
+    }
+    expect(compileApprovedLesson(gold, plan).errors.length).toBeGreaterThan(0);
   });
 });

@@ -1,45 +1,143 @@
 "use client";
 
-import { useState } from "react";
-import { requestAnalysis, requestCompile, requestP5Composition, requestPlan } from "./client";
-import { compareAnalysisDrafts, groupsFromSingleDraft } from "./comparison";
+import { useEffect, useRef, useState } from "react";
+import { requestAnalysis, requestCompile, requestP5Composition, requestP5ModelStatus, requestPlan } from "./client";
+import { validateAnalysisDraft } from "./contracts";
+import { groupsFromSingleDraft } from "./comparison";
 import { AnalysisReview } from "./AnalysisReview";
 import { LearningWorkspace } from "./LearningWorkspace";
 import { P5Brand, P5DiscoveryHome } from "./P5DiscoveryHome";
 import { RepresentationReview } from "./RepresentationReview";
 import { SourceBook } from "./SourceBook";
 import { reactionRateSource } from "./sources";
-import type { AnalysisResult, ApprovedLearningSpec, ComparisonGroup, CompiledLessonManifest, DepthMinutes, LearningGoal, P5ComposeResponse, PlanningResult, RepresentationPlanDraft } from "./types";
+import type { AnalysisResult, ApprovedLearningSpec, CompiledLessonManifest, DepthMinutes, LearningGoal, P5ComposeResponse, RepresentationPlanDraft } from "./types";
 import styles from "./prototype5.module.css";
+import type { P5ModelStatus } from "./localModel";
 
 type Stage = "home" | "source" | "analysis" | "review" | "planning" | "representation-review" | "purpose" | "depth" | "composing" | "workspace";
 const goals: Array<{ id: LearningGoal; label: string; symbol: string }> = [{ id: "explore", label: "I'm curious", symbol: "↗" }, { id: "understand", label: "I need to understand this", symbol: "○" }, { id: "revise", label: "I'm revising", symbol: "↻" }, { id: "test", label: "I have a test", symbol: "✓" }];
 const depths: Array<{ value: DepthMinutes; label: string }> = [{ value: 5, label: "Quick look" }, { value: 15, label: "Learn it" }, { value: 30, label: "Go deep" }];
 
-export function PrototypeFiveLab() {
-  const [stage, setStage] = useState<Stage>("home"); const [fast, setFast] = useState<AnalysisResult | null>(null); const [quality, setQuality] = useState<AnalysisResult | null>(null); const [runningProfile, setRunningProfile] = useState<"fast" | "quality" | null>(null); const [groups, setGroups] = useState<ComparisonGroup[]>([]); const [spec, setSpec] = useState<ApprovedLearningSpec | null>(null); const [planning, setPlanning] = useState<PlanningResult | null>(null); const [plan, setPlan] = useState<RepresentationPlanDraft | null>(null); const [manifest, setManifest] = useState<CompiledLessonManifest | null>(null); const [goal, setGoal] = useState<LearningGoal>("understand"); const [depth, setDepth] = useState<DepthMinutes>(15); const [composition, setComposition] = useState<P5ComposeResponse | null>(null); const [error, setError] = useState("");
+function cachedAnalysis(): AnalysisResult | null {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem("p5-analysis-4b") || "null");
+    if (saved?.source === JSON.stringify(reactionRateSource) && saved?.result?.modelId === "qwen3:4b-instruct" && validateAnalysisDraft(reactionRateSource, saved.result.draft).valid) return saved.result;
+  } catch { /* Storage is optional. */ }
+  return null;
+}
 
-  function reset() { setStage("home"); setFast(null); setQuality(null); setGroups([]); setSpec(null); setPlanning(null); setPlan(null); setManifest(null); setComposition(null); setError(""); }
-  async function runAnalysis(profile: "fast" | "quality") { setRunningProfile(profile); setError(""); try { const result = await requestAnalysis(reactionRateSource.id, profile); if (profile === "fast") setFast(result); else setQuality(result); } catch (caught) { setError(caught instanceof Error ? caught.message : "Analysis request failed."); } finally { setRunningProfile(null); } }
-  function openReview() { const drafts = [fast, quality].filter((item): item is AnalysisResult & { draft: NonNullable<AnalysisResult["draft"]> } => item?.status === "accepted" && !!item.draft); if (!drafts.length) { setError("At least one analyzer must produce a validated draft."); return; } const next = drafts.length === 2 ? compareAnalysisDrafts(drafts[0].draft, drafts[1].draft) : groupsFromSingleDraft(drafts[0].draft, drafts[0].profile); setGroups(next); setStage("review"); }
-  async function runPlanner(profile: "fast" | "quality") { if (!spec) return; setStage("planning"); setError(""); const result = await requestPlan(spec, profile); setPlanning(result); if (result.status === "accepted" && result.draft) { setPlan(result.draft); setStage("representation-review"); } }
-  async function compile(ids: string[]) { if (!spec || !plan) return; const response = await requestCompile(spec, plan, ids); setManifest(response.manifest); setStage("purpose"); }
-  async function beginComposition(nextDepth: DepthMinutes) { if (!manifest) return; setDepth(nextDepth); setStage("composing"); try { const result = await requestP5Composition(manifest, goal, nextDepth, []); setComposition(result); setStage("workspace"); } catch (caught) { setError(caught instanceof Error ? caught.message : "Composition failed."); setStage("depth"); } }
+export function PrototypeFiveLab() {
+  const [stage, setStage] = useState<Stage>("home");
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(cachedAnalysis);
+  const [spec, setSpec] = useState<ApprovedLearningSpec | null>(null);
+  const [plan, setPlan] = useState<RepresentationPlanDraft | null>(null);
+  const [manifest, setManifest] = useState<CompiledLessonManifest | null>(null);
+  const [goal, setGoal] = useState<LearningGoal>("understand");
+  const [depth, setDepth] = useState<DepthMinutes>(15);
+  const [composition, setComposition] = useState<P5ComposeResponse | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const [modelStatus, setModelStatus] = useState<P5ModelStatus | null>(null);
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => {
+    const statusController = new AbortController();
+    void requestP5ModelStatus(statusController.signal)
+      .then(setModelStatus)
+      .catch(() => setModelStatus({ connected: false, installed: false, loaded: false, model: "qwen3:4b-instruct", provider: "ollama", message: "The local AI connection could not be checked." }));
+    return () => statusController.abort();
+  }, []);
+  useEffect(() => {
+    if (!busy) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [busy]);
+
+  function cancel() {
+    controller.current?.abort(); controller.current = null;
+    setBusy(false); setError("Stopped. You can retry when you’re ready.");
+  }
+  function reset() {
+    cancel(); setStage("home"); setAnalysis(null); setSpec(null);
+    setPlan(null); setManifest(null); setComposition(null); setError("");
+  }
+  async function run(task: (signal: AbortSignal) => Promise<void>) {
+    if (controller.current) return;
+    const operation = new AbortController(); controller.current = operation;
+    setBusy(true); setElapsed(0); setError("");
+    try { await task(operation.signal); }
+    catch (caught) { if (!operation.signal.aborted) setError(caught instanceof Error ? caught.message : "The request failed. Please retry."); }
+    finally { if (controller.current === operation) { controller.current = null; setBusy(false); } }
+  }
+  async function analyze() {
+    await run(async (signal) => {
+      const result = await requestAnalysis(reactionRateSource.id, "fast", signal);
+      if (signal.aborted) return;
+      setAnalysis(result);
+      if (result.status === "accepted") {
+        try { sessionStorage.setItem("p5-analysis-4b", JSON.stringify({ source: JSON.stringify(reactionRateSource), result })); } catch { /* Continue without caching. */ }
+      }
+      if (result.status === "failed") setError([result.failureReason, ...result.validationErrors].filter(Boolean).join(" "));
+    });
+  }
+  async function planFrom(approved: ApprovedLearningSpec) {
+    setSpec(approved); setStage("planning");
+    await run(async (signal) => {
+      const result = await requestPlan(approved, "fast", signal);
+      if (signal.aborted) return;
+      if (result.status === "accepted" && result.draft) { setPlan(result.draft); setStage("representation-review"); }
+      else setError([result.failureReason, ...result.validationErrors].filter(Boolean).join(" "));
+    });
+  }
+  async function compile(ids: string[]) {
+    if (!spec || !plan) return;
+    const result = await requestCompile(spec, plan, ids);
+    setManifest(result.manifest); setStage("purpose");
+  }
+  async function beginComposition(value: DepthMinutes) {
+    if (!manifest || busy) return;
+    setDepth(value); setStage("composing");
+    await run(async (signal) => {
+      const result = await requestP5Composition(manifest, goal, value, [], signal);
+      if (signal.aborted) return;
+      setComposition(result); setStage("workspace");
+    });
+  }
 
   if (stage === "home") return <P5DiscoveryHome onContinue={() => setStage("source")}/>;
   if (stage === "workspace" && manifest && composition) return <LearningWorkspace manifest={manifest} goal={goal} depth={depth} initialComposition={composition} onRestart={reset}/>;
-  if (stage === "review") return <AnalysisReview source={reactionRateSource} groups={groups} onApproved={(approved) => { setSpec(approved); void runPlannerWithSpec(approved, "quality", setStage, setPlanning, setPlan, setError); }}/>;
-  if (stage === "representation-review" && spec && plan && planning) return <RepresentationReview spec={spec} plan={plan} modelId={planning.modelId} onCompile={compile}/>;
-  if (stage === "purpose" || stage === "depth") return <div className={`setup-page focused-setup setup-${stage === "purpose" ? "intent" : "depth"} stage-enter`}><header className="site-header compact-header"><P5Brand/><button className="text-button" onClick={() => setStage(stage === "depth" ? "purpose" : "representation-review")}>{stage === "depth" ? "← Previous choice" : "← Back to compiler"}</button></header><main className="focused-setup-shell"><div className="setup-step-dots"><span className={stage === "purpose" ? "active" : "complete"}/><span className={stage === "depth" ? "active" : ""}/></div>{stage === "purpose" ? <section className="setup-scene setup-intent-scene"><h1>What brings you here?</h1><div className="intent-choice-grid">{goals.map((item, index) => <button key={item.id} onClick={() => { setGoal(item.id); window.setTimeout(() => setStage("depth"), 180); }}><span>{String(index + 1).padStart(2,"0")}</span><i>{item.symbol}</i><strong>{item.label}</strong><small>→</small></button>)}</div></section> : <section className="setup-scene setup-depth-scene"><h1>How deep should we go?</h1><div className="depth-choice-grid">{depths.map((item, index) => <button key={item.value} onClick={() => void beginComposition(item.value)}><span>{String(index + 1).padStart(2,"0")}</span><strong>{item.label}</strong><i>→</i></button>)}</div></section>}<div className="setup-atmosphere"><span/><span/><span/></div></main></div>;
+  if (stage === "review" && analysis?.draft) return <AnalysisReview source={reactionRateSource} groups={groupsFromSingleDraft(analysis.draft, "fast")} onApproved={(approved) => void planFrom(approved)}/>;
+  if (stage === "representation-review" && spec && plan) return <RepresentationReview spec={spec} plan={plan} modelId="qwen3:4b-instruct" onCompile={compile} onReplan={() => void planFrom(spec)}/>;
+  if (stage === "purpose" || stage === "depth") return <div key={stage} className={`setup-page focused-setup setup-${stage === "purpose" ? "intent" : "depth"} stage-enter`}>
+    <header className="site-header compact-header"><P5Brand/><button className="text-button" onClick={() => setStage(stage === "depth" ? "purpose" : "representation-review")}>← Previous choice</button></header>
+    <main className="focused-setup-shell"><div className="setup-step-dots"><span className={stage === "purpose" ? "active" : "complete"}/><span className={stage === "depth" ? "active" : ""}/></div>
+      {stage === "purpose" ? <section className="setup-scene setup-intent-scene"><h1>What brings you here?</h1><div className="intent-choice-grid">{goals.map((item, index) => <button key={item.id} onClick={() => { setGoal(item.id); setStage("depth"); }}><span>{String(index + 1).padStart(2, "0")}</span><i>{item.symbol}</i><strong>{item.label}</strong><small>→</small></button>)}</div></section>
+        : <section className="setup-scene setup-depth-scene"><h1>How deep should we go?</h1><div className="depth-choice-grid">{depths.map((item, index) => <button key={item.value} onClick={() => void beginComposition(item.value)}><span>{String(index + 1).padStart(2, "0")}</span><strong>{item.label}</strong><i>→</i></button>)}</div></section>}
+      <div className="setup-atmosphere"><span/><span/><span/></div>
+    </main>
+  </div>;
 
-  return <div className={styles.labShell}><header className={styles.siteHeader}><P5Brand/><nav><a href="/prototype-4">Prototype 4</a><button onClick={reset}>Back to eye</button><a href="/prototype-5/evaluation">Evaluator</a></nav></header>
+  return <div className={styles.labShell}>
+    <header className={styles.siteHeader}><P5Brand/><nav><button onClick={reset}>Back to eye</button><a href="/prototype-5/evaluation">Evaluator</a></nav></header>
     {stage === "source" ? <SourceBook source={reactionRateSource} onStart={() => setStage("analysis")}/> : null}
-    {stage === "analysis" ? <main className={styles.analysisStage}><header><span>INDEPENDENT SOURCE ANALYSIS</span><h1>Two models. One source. No shared draft.</h1><p>These CPU-only runs are deliberate review tasks. The 4B baseline may take about two minutes; the 14B quality pass may take longer.</p></header><div className={styles.modelRuns}><ModelRun profile="fast" title="Fast baseline" result={fast} running={runningProfile === "fast"} onRun={() => void runAnalysis("fast")}/><i>then</i><ModelRun profile="quality" title="Quality comparison" result={quality} running={runningProfile === "quality"} onRun={() => void runAnalysis("quality")} disabled={!fast}/></div><footer><div>{error ? <span>{error}</span> : <span>Models never see one another’s output.</span>}</div><button disabled={!fast && !quality || !!runningProfile} onClick={openReview}>Compare validated drafts →</button></footer></main> : null}
-    {stage === "planning" ? <main className={styles.planningStage}><span>REPRESENTATION PLANNER</span><h1>{planning?.status === "failed" ? "The 14B planner did not pass." : "Planning approved representations…"}</h1>{planning?.status === "failed" ? <><p>{planning.failureReason}</p><div>{planning.validationErrors.map((item) => <code key={item}>{item}</code>)}</div><button onClick={() => void runPlanner("fast")}>Try the 4B planner explicitly →</button></> : <><div className={styles.compilerAnimation}><i/><i/><i/></div><p>The model can select only approved primitive IDs and source references.</p></>}</main> : null}
-    {stage === "composing" ? <main className={styles.planningStage}><span>EXISTING 4B LEARNING COMPOSER</span><h1>Assembling only the compiled legal blocks…</h1><div className={styles.compilerAnimation}><i/><i/><i/></div><p>Purpose, depth and learner evidence shape the route. Source content does not change.</p></main> : null}
+    {stage === "analysis" ? <main className={`${styles.analysisStage} ${styles.stageSurface}`}>
+      <header><span>SOURCE LABORATORY · LOCAL 4B</span><h1>One source. Your judgment.</h1><p>The small model identifies source-backed ideas. You decide which ones enter the lesson.</p></header>
+      <div className={styles.singleModelRun}><article><span>4B</span><h2>{analysis?.status === "accepted" ? "Ready for your review" : "Extract the learning ingredients"}</h2>
+        <div className={styles.modelConnection} data-connected={modelStatus?.connected && modelStatus.installed ? "true" : "false"}><i/><strong>{modelStatus?.message ?? "Checking the local AI connection…"}</strong><small>{modelStatus?.loaded ? "Model is already in memory." : "The first run may take longer while the model loads."}</small></div>
+        <div className={styles.sourceToLesson}><span>Trusted source</span><i>→</i><span>Cited ideas</span><i>→</i><span>Your approval</span></div>
+        {busy ? <div className={styles.runningModel}><i/><strong>Reading the source… {elapsed}s</strong><small>One local task at a time. This can still take a few minutes.</small><button onClick={cancel}>Stop this run</button></div>
+          : <button onClick={() => void analyze()}>{analysis ? "Retry source analysis" : "Analyze with Qwen 4B →"}</button>}
+        {analysis?.status === "accepted" ? <p>Validated in {(analysis.latencyMs / 1000).toFixed(1)} seconds. Every extracted item still needs your approval.</p> : null}
+      </article></div>
+      <footer><div role="status">{error || "The larger model is disabled. No second model run is required."}</div><button disabled={busy || analysis?.status !== "accepted"} onClick={() => setStage("review")}>Review the extracted ideas →</button></footer>
+    </main> : null}
+    {stage === "planning" || stage === "composing" ? <main className={`${styles.planningStage} ${styles.stageSurface}`}>
+      <span>{stage === "planning" ? "REPRESENTATION PLANNER · 4B" : "LEARNING COMPOSER · 4B"}</span>
+      <h1>{error ? "Let’s try that again." : stage === "planning" ? "Giving your approved ideas a form…" : "Arranging your interactive path…"}</h1>
+      {busy ? <><div className={styles.compilerAnimation}><i/><i/><i/></div><p role="status">{elapsed}s · {stage === "planning" ? "Choosing from trusted interaction types." : "Choosing from your approved blocks."}</p><button onClick={cancel}>Stop this run</button></> : null}
+      {error ? <><p role="alert">{error}</p><button onClick={() => stage === "planning" && spec ? void planFrom(spec) : void beginComposition(depth)}>Retry with Qwen 4B →</button></> : null}
+    </main> : null}
   </div>;
 }
-
-function ModelRun({ profile, title, result, running, onRun, disabled }: { profile: "fast" | "quality"; title: string; result: AnalysisResult | null; running: boolean; onRun: () => void; disabled?: boolean }) { return <article><span>{profile === "fast" ? "4B" : "14B"}</span><h2>{title}</h2><p>{profile === "fast" ? "Fast analysis baseline and future composer." : "Independent quality analysis and representation planner."}</p>{running ? <div className={styles.runningModel}><i/><strong>Analyzing trusted structure…</strong><small>You can leave this tab open.</small></div> : result ? <div className={result.status === "accepted" ? styles.runAccepted : styles.runFailed}><strong>{result.status === "accepted" ? "Validated draft ready" : "Explicit failure"}</strong><small>{result.modelId} · {(result.latencyMs / 1000).toFixed(1)} s</small>{result.failureReason ? <p>{result.failureReason}</p> : null}</div> : <button disabled={disabled} onClick={onRun}>Run {profile === "fast" ? "4B" : "14B"} analyzer →</button>}</article>; }
-
-async function runPlannerWithSpec(spec: ApprovedLearningSpec, profile: "quality" | "fast", setStage: (stage: Stage) => void, setPlanning: (result: PlanningResult | null) => void, setPlan: (plan: RepresentationPlanDraft | null) => void, setError: (message: string) => void) { setStage("planning"); setPlanning(null); setError(""); try { const result = await requestPlan(spec, profile); setPlanning(result); if (result.status === "accepted" && result.draft) { setPlan(result.draft); setStage("representation-review"); } } catch (caught) { setPlanning({ status: "failed", profile, providerId: "ollama", modelId: profile === "quality" ? "qwen3:14b" : "qwen3:4b-instruct", latencyMs: 0, correctionAttempted: false, validationErrors: [], failureReason: caught instanceof Error ? caught.message : "Planner request failed." }); } }

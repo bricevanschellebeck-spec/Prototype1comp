@@ -13,7 +13,7 @@ Prototype 5 is available at `/prototype-5`. It adds a source-grounded lesson com
 - `/prototype-4/evaluation` — the separate twelve-scenario local-model evaluator.
 - `/prototype-5` — Prototype 5: source-grounded analysis, human approval,
   deterministic block compilation, and adaptive lesson composition.
-- `/prototype-5/evaluation` — the dual-model source and representation evaluator.
+- `/prototype-5/evaluation` — the source and representation evaluator, currently using Qwen 4B only.
 
 Prototype 3 keeps the learning area object-first and uses AI only to select and
 sequence registered block IDs. See [PROTOTYPE_3.md](./PROTOTYPE_3.md) for its
@@ -76,9 +76,9 @@ pnpm test
 pnpm build
 ```
 
-Prototype 1 remains entirely static. Prototype 5 can run its deterministic
-interfaces without a cloud API, while its analyzer and representation planner
-currently use the optional local Ollama models documented in
+Prototype 1 remains entirely static. Prototype 5 now uses only `qwen3:4b-instruct` for analysis, planning, and
+composition. The larger-model comparison is paused. It retains mandatory human
+review, exact source citations, and deterministic block factories, as documented in
 [PROTOTYPE_5.md](./PROTOTYPE_5.md). A future cloud provider can be added behind
 the existing interfaces without exposing a key in the browser.
 

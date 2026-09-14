@@ -1,0 +1,609 @@
+{
+  "reportVersion": "p6-live-goal-evaluation-1",
+  "generatedAt": "2026-09-09T13:41:01.612Z",
+  "provider": "gemini",
+  "model": "gemini-3.5-flash-lite",
+  "sourcePackageId": "circuits-resistance-approved-v1",
+  "profile": "full",
+  "repeatsPerGoal": 3,
+  "totalRuns": 12,
+  "acceptedRuns": 10,
+  "invalidOrFallbackRuns": 2,
+  "compilationFailures": 0,
+  "correctionRuns": 7,
+  "meanLatencyMs": 18514,
+  "withinGoal": {
+    "explore": {
+      "totalRuns": 3,
+      "acceptedRuns": 3,
+      "invalidOrFallbackRuns": 0,
+      "compilationFailures": 0,
+      "distinctStructures": 1,
+      "modalConsistencyPercent": 100,
+      "meanLatencyMs": 6932,
+      "p95LatencyMs": 9104,
+      "representativeSignature": {
+        "primitiveOrder": [
+          "prediction",
+          "parameter-experiment",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "evidence",
+          "explore",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    "understand": {
+      "totalRuns": 3,
+      "acceptedRuns": 3,
+      "invalidOrFallbackRuns": 0,
+      "compilationFailures": 0,
+      "distinctStructures": 3,
+      "modalConsistencyPercent": 33,
+      "meanLatencyMs": 45937,
+      "p95LatencyMs": 100220,
+      "representativeSignature": {
+        "primitiveOrder": [
+          "parameter-experiment",
+          "prediction",
+          "worked-example",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "explore",
+          "evidence",
+          "explain",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    "revise": {
+      "totalRuns": 3,
+      "acceptedRuns": 2,
+      "invalidOrFallbackRuns": 1,
+      "compilationFailures": 0,
+      "distinctStructures": 2,
+      "modalConsistencyPercent": 50,
+      "meanLatencyMs": 9000,
+      "p95LatencyMs": 15575,
+      "representativeSignature": {
+        "primitiveOrder": [
+          "prediction",
+          "parameter-experiment",
+          "worked-example",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "evidence",
+          "explore",
+          "explain",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    "test": {
+      "totalRuns": 3,
+      "acceptedRuns": 2,
+      "invalidOrFallbackRuns": 1,
+      "compilationFailures": 0,
+      "distinctStructures": 2,
+      "modalConsistencyPercent": 50,
+      "meanLatencyMs": 12185,
+      "p95LatencyMs": 12533,
+      "representativeSignature": {
+        "primitiveOrder": [
+          "observation",
+          "multiple-choice",
+          "target-challenge",
+          "transfer-challenge"
+        ],
+        "stageRoles": [
+          "orient",
+          "evidence",
+          "apply",
+          "transfer"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "transfer-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    }
+  },
+  "betweenGoals": [
+    {
+      "left": "explore",
+      "right": "understand",
+      "primitiveOrder": false,
+      "stageRoles": false,
+      "supportAlternatives": true,
+      "finalApplicationType": true,
+      "delayedFacts": true,
+      "omittedFacts": true,
+      "differingDimensions": 2,
+      "meaningfullyDifferent": true
+    },
+    {
+      "left": "explore",
+      "right": "revise",
+      "primitiveOrder": false,
+      "stageRoles": false,
+      "supportAlternatives": true,
+      "finalApplicationType": true,
+      "delayedFacts": true,
+      "omittedFacts": true,
+      "differingDimensions": 2,
+      "meaningfullyDifferent": true
+    },
+    {
+      "left": "explore",
+      "right": "test",
+      "primitiveOrder": false,
+      "stageRoles": false,
+      "supportAlternatives": true,
+      "finalApplicationType": false,
+      "delayedFacts": true,
+      "omittedFacts": true,
+      "differingDimensions": 3,
+      "meaningfullyDifferent": true
+    },
+    {
+      "left": "understand",
+      "right": "revise",
+      "primitiveOrder": false,
+      "stageRoles": false,
+      "supportAlternatives": true,
+      "finalApplicationType": true,
+      "delayedFacts": true,
+      "omittedFacts": true,
+      "differingDimensions": 2,
+      "meaningfullyDifferent": true
+    },
+    {
+      "left": "understand",
+      "right": "test",
+      "primitiveOrder": false,
+      "stageRoles": false,
+      "supportAlternatives": true,
+      "finalApplicationType": false,
+      "delayedFacts": true,
+      "omittedFacts": true,
+      "differingDimensions": 3,
+      "meaningfullyDifferent": true
+    },
+    {
+      "left": "revise",
+      "right": "test",
+      "primitiveOrder": false,
+      "stageRoles": false,
+      "supportAlternatives": true,
+      "finalApplicationType": false,
+      "delayedFacts": true,
+      "omittedFacts": true,
+      "differingDimensions": 3,
+      "meaningfullyDifferent": true
+    }
+  ],
+  "requiredContrasts": {
+    "exploreVsTest": {
+      "left": "explore",
+      "right": "test",
+      "primitiveOrder": false,
+      "stageRoles": false,
+      "supportAlternatives": true,
+      "finalApplicationType": false,
+      "delayedFacts": true,
+      "omittedFacts": true,
+      "differingDimensions": 3,
+      "meaningfullyDifferent": true
+    },
+    "understandVsRevise": {
+      "left": "understand",
+      "right": "revise",
+      "primitiveOrder": false,
+      "stageRoles": false,
+      "supportAlternatives": true,
+      "finalApplicationType": true,
+      "delayedFacts": true,
+      "omittedFacts": true,
+      "differingDimensions": 2,
+      "meaningfullyDifferent": true
+    }
+  },
+  "runs": [
+    {
+      "goal": "explore",
+      "depthMinutes": 5,
+      "run": 1,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": false,
+      "latencyMs": 5418,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "prediction",
+          "parameter-experiment",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "evidence",
+          "explore",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "explore",
+      "depthMinutes": 5,
+      "run": 2,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": false,
+      "latencyMs": 9104,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "prediction",
+          "parameter-experiment",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "evidence",
+          "explore",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "explore",
+      "depthMinutes": 5,
+      "run": 3,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": false,
+      "latencyMs": 6274,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "prediction",
+          "parameter-experiment",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "evidence",
+          "explore",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "understand",
+      "depthMinutes": 15,
+      "run": 1,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": true,
+      "latencyMs": 100220,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "parameter-experiment",
+          "prediction",
+          "worked-example",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "explore",
+          "evidence",
+          "explain",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "understand",
+      "depthMinutes": 15,
+      "run": 2,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": true,
+      "latencyMs": 25412,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "parameter-experiment",
+          "prediction",
+          "worked-example",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "explore",
+          "evidence",
+          "explain",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-explain+objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "understand",
+      "depthMinutes": 15,
+      "run": 3,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": true,
+      "latencyMs": 12179,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "observation",
+          "prediction",
+          "worked-example",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "orient",
+          "evidence",
+          "explain",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "revise",
+      "depthMinutes": 15,
+      "run": 1,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": false,
+      "latencyMs": 5678,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "prediction",
+          "parameter-experiment",
+          "worked-example",
+          "target-challenge"
+        ],
+        "stageRoles": [
+          "evidence",
+          "explore",
+          "explain",
+          "apply"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "target-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "revise",
+      "depthMinutes": 15,
+      "run": 2,
+      "accepted": false,
+      "compiled": false,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": true,
+      "latencyMs": 15575,
+      "validationErrors": [
+        "stages.2.primitive.fixedBindings: Invalid input: expected array, received undefined",
+        "stages.2.primitive.derivationRuleId: Invalid input: expected string, received undefined",
+        "stages.2.primitive: Unrecognized keys: \"requestedPrecision\", \"revealOrder\", \"targetVariableId\""
+      ],
+      "compileErrors": [],
+      "failureReason": "The lesson designer failed strict validation after one correction attempt.",
+      "signature": null
+    },
+    {
+      "goal": "revise",
+      "depthMinutes": 15,
+      "run": 3,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": false,
+      "latencyMs": 5748,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "prediction",
+          "parameter-experiment",
+          "target-challenge",
+          "transfer-challenge"
+        ],
+        "stageRoles": [
+          "evidence",
+          "explore",
+          "apply",
+          "transfer"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "transfer-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "test",
+      "depthMinutes": 15,
+      "run": 1,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": true,
+      "latencyMs": 11778,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "observation",
+          "multiple-choice",
+          "target-challenge",
+          "transfer-challenge"
+        ],
+        "stageRoles": [
+          "orient",
+          "evidence",
+          "apply",
+          "transfer"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-predict"
+        ],
+        "finalApplicationType": "transfer-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    },
+    {
+      "goal": "test",
+      "depthMinutes": 15,
+      "run": 2,
+      "accepted": false,
+      "compiled": false,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": true,
+      "latencyMs": 12533,
+      "validationErrors": [
+        "Directional assessment requires an increases/decreases relationship."
+      ],
+      "compileErrors": [],
+      "failureReason": "The lesson designer failed strict validation after one correction attempt.",
+      "signature": null
+    },
+    {
+      "goal": "test",
+      "depthMinutes": 15,
+      "run": 3,
+      "accepted": true,
+      "compiled": true,
+      "fallbackUsed": false,
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "corrected": true,
+      "latencyMs": 12245,
+      "validationErrors": [],
+      "compileErrors": [],
+      "signature": {
+        "primitiveOrder": [
+          "prediction",
+          "multiple-choice",
+          "target-challenge",
+          "transfer-challenge"
+        ],
+        "stageRoles": [
+          "evidence",
+          "apply",
+          "apply",
+          "transfer"
+        ],
+        "supportAlternatives": [
+          "support:explanation:objective-explain"
+        ],
+        "finalApplicationType": "transfer-challenge",
+        "delayedFacts": [],
+        "omittedFacts": []
+      }
+    }
+  ]
+}

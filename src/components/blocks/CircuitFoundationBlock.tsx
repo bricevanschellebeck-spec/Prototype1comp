@@ -9,9 +9,10 @@ type Props = {
 };
 
 export function CircuitFoundationBlock({ block, onInteraction }: Props) {
+  const [closed, setClosed] = useState(false);
+
   if (block.content.kind !== "circuit-foundation") return null;
 
-  const [closed, setClosed] = useState(false);
   const { heading, introduction } = block.content;
 
   function toggleCircuit() {

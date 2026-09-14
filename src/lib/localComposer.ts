@@ -59,8 +59,7 @@ export function composeLocally(request: CompositionRequest): LessonBlueprint {
   const misconceptionKnown = request.learnerSnapshot.knownMisconceptions.includes(
     "more-resistance-means-more-current",
   );
-  let preferredIds: string[];
-  preferredIds = [
+  const preferredIds: string[] = [
     "complete-circuit-foundation",
     "battery-voltage-discovery",
     "resistance-slider-simulation",

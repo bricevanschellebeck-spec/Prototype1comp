@@ -13,10 +13,10 @@ async function post(path, body) {
   return payload;
 }
 for (const sourceDocumentId of sourceIds) {
-  for (const modelProfile of ["fast", "quality"]) {
+  for (const modelProfile of ["fast"]) {
     const analysis = await post("/api/prototype-5/analyze", { sourceDocumentId, modelProfile });
     rows.push({ sourceDocumentId, modelProfile, status: analysis.status, schemaValid: analysis.rawMetrics.schemaValid, citationValid: analysis.rawMetrics.semanticValid, correction: analysis.correctionAttempted, latencyMs: analysis.latencyMs });
-    console.log(`${String(rows.length).padStart(2,"0")}/${sourceIds.length * 2} ${sourceDocumentId} · ${modelProfile}: ${analysis.status}, ${(analysis.latencyMs / 1000).toFixed(1)} s`);
+    console.log(`${String(rows.length).padStart(2,"0")}/${sourceIds.length} ${sourceDocumentId} · ${modelProfile}: ${analysis.status}, ${(analysis.latencyMs / 1000).toFixed(1)} s`);
   }
 }
 if (profile === "full") {
@@ -24,7 +24,7 @@ if (profile === "full") {
   if (!fixtureResponse.ok) throw new Error("Could not load the local P5 evaluation fixtures.");
   const fixtures = await fixtureResponse.json();
   for (const fixture of fixtures) {
-    for (const modelProfile of ["fast", "quality"]) {
+    for (const modelProfile of ["fast"]) {
       const result = await post("/api/prototype-5/plan", { approvedSpec: fixture.goldSpec, modelProfile });
       const proposals = result.draft?.objectivePlans.flatMap((objective) => objective.proposals) || [];
       const primitives = new Set(proposals.map((proposal) => proposal.primitiveId));
@@ -36,7 +36,7 @@ if (profile === "full") {
   }
 }
 const percent = (predicate) => Math.round(rows.filter(predicate).length / rows.length * 100);
-const report = { profile, analyzerRuns: rows.length, plannerRuns: plannerRows.length, safeOrExplicitFailure: 100, rawSchemaValidRate: percent((row) => row.schemaValid), validCitationRate: percent((row) => row.citationValid), correctionOrFailureRate: percent((row) => row.correction || row.status === "failed"), primitiveSuitabilityRate: plannerRows.length ? Math.round(plannerRows.filter((row) => row.suitable).length / plannerRows.length * 100) : "not run", meanLatencyMs: Math.round(rows.reduce((sum, row) => sum + row.latencyMs, 0) / rows.length) };
+const report = { profile, analyzerRuns: rows.length, plannerRuns: plannerRows.length,  validatedSchemaRate: percent((row) => row.schemaValid), validCitationRate: percent((row) => row.citationValid), correctionOrFailureRate: percent((row) => row.correction || row.status === "failed"), primitiveSuitabilityRate: plannerRows.length ? Math.round(plannerRows.filter((row) => row.suitable).length / plannerRows.length * 100) : "not run", meanLatencyMs: Math.round(rows.reduce((sum, row) => sum + row.latencyMs, 0) / rows.length) };
 console.log("\nPrototype 5 source-analysis evaluation");
 console.table(report);
-console.log(report.rawSchemaValidRate >= 90 && report.validCitationRate >= 90 ? "SOURCE READY: raw structure meets initial thresholds." : "REVIEW: source validation stayed safe, but model quality needs prompt/model iteration.");
+console.log(report.validatedSchemaRate >= 90 && report.validCitationRate >= 90 ? "STRUCTURE CHECK PASSED: inspect source meaning and teaching suitability separately." : "REVIEW: source validation stayed safe, but model quality needs prompt/model iteration.");

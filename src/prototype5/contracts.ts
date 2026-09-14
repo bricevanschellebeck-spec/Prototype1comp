@@ -122,6 +122,9 @@ export function validateApprovedSpec(source: SourceDocument, candidate: unknown)
   const spec = schema.data as ApprovedLearningSpec;
   const errors: string[] = [];
   if (spec.sourceDocumentId !== source.id) errors.push("Approved spec belongs to another source.");
+  for (const [label, items] of Object.entries({ concepts: spec.concepts, facts: spec.facts, relationships: spec.relationships, objectives: spec.objectives, misconceptions: spec.misconceptions })) {
+    if (new Set(items.map((item) => item.id)).size !== items.length) errors.push(`Duplicate approved ${label} ID.`);
+  }
   const conceptIds = new Set(spec.concepts.map((item) => item.id)); const factIds = new Set(spec.facts.map((item) => item.id)); const objectiveIds = new Set(spec.objectives.map((item) => item.id));
   for (const item of [...spec.concepts, ...spec.facts, ...spec.relationships]) item.citations.forEach((citation) => errors.push(...validateCitation(source, citation)));
   for (const relation of spec.relationships) {
@@ -154,21 +157,39 @@ export function validateRepresentationPlan(source: SourceDocument, spec: Approve
   const objectives = new Set(spec.objectives.map((item) => item.id)); const facts = new Set(spec.facts.map((item) => item.id)); const relationships = new Set(spec.relationships.map((item) => item.id)); const concepts = new Set(spec.concepts.map((item) => item.id));
   const seen = new Set<string>();
   for (const objectivePlan of plan.objectivePlans) {
+    if (!objectivePlan.representationGap && !objectivePlan.proposals.length) errors.push("Each objective needs a proposal or an explicit representation gap.");
     if (!objectives.has(objectivePlan.objectiveId)) errors.push(`Unknown objective ${objectivePlan.objectiveId}.`);
     if (objectivePlan.representationGap && objectivePlan.proposals.length) errors.push(`${objectivePlan.objectiveId} cannot have a gap and proposals.`);
     if (objectivePlan.representationGap && !objectivePlan.gapReason) errors.push(`${objectivePlan.objectiveId} needs a gap reason.`);
     for (const proposal of objectivePlan.proposals) {
       if (seen.has(proposal.tempId)) errors.push(`Duplicate proposal ${proposal.tempId}.`); seen.add(proposal.tempId);
       if (proposal.primitiveId !== proposal.factoryConfig.kind) errors.push(`${proposal.tempId} primitive and factory kind differ.`);
+      if (["evidence", "apply", "transfer"].includes(proposal.role) && !["prediction", "target-challenge", "step-sequence"].includes(proposal.primitiveId)) errors.push("An evidence/application role needs a scored interaction, not a completion button.");
       proposal.supportingFactIds.forEach((factId) => { if (!facts.has(factId)) errors.push(`${proposal.tempId} uses unapproved fact ${factId}.`); });
       proposal.relationshipIds.forEach((relationshipId) => { if (!relationships.has(relationshipId)) errors.push(`${proposal.tempId} uses unapproved relationship ${relationshipId}.`); });
       if (proposal.factoryConfig.kind === "prediction" && !relationships.has(proposal.factoryConfig.relationshipId)) errors.push(`${proposal.tempId} predicts an unknown relationship.`);
       if (proposal.factoryConfig.kind === "classification") {
+        errors.push("Classification is unavailable until approved category-answer mappings are supported. Choose another representation or report a gap.");
         proposal.factoryConfig.categoryConceptIds.forEach((conceptId) => { if (!concepts.has(conceptId)) errors.push(`${proposal.tempId} uses unknown concept ${conceptId}.`); });
         proposal.factoryConfig.itemFactIds.forEach((factId) => { if (!facts.has(factId)) errors.push(`${proposal.tempId} uses unknown fact ${factId}.`); });
       }
       if (proposal.factoryConfig.kind === "step-sequence") proposal.factoryConfig.relationshipIds.forEach((relationshipId) => { if (!relationships.has(relationshipId)) errors.push(`${proposal.tempId} sequences unknown relationship ${relationshipId}.`); });
       if (proposal.factoryConfig.kind === "evidence-reveal") proposal.factoryConfig.factIds.forEach((factId) => { if (!facts.has(factId)) errors.push(`${proposal.tempId} reveals unknown fact ${factId}.`); });
+      const config = proposal.factoryConfig;
+      if (config.kind === "prediction") {
+        const relation = spec.relationships.find((item) => item.id === config.relationshipId);
+        if (relation && !["increases", "decreases"].includes(relation.type)) errors.push("Directional predictions require an increases/decreases relationship.");
+      }
+      if (config.kind === "step-sequence") {
+        const chain = config.relationshipIds.map((id) => spec.relationships.find((item) => item.id === id));
+        if (new Set(config.relationshipIds).size !== chain.length || chain.some((item, index) => !item || item.type !== "sequence" || (index > 0 && chain[index - 1]?.toConceptId !== item.fromConceptId))) errors.push("Sequencing requires an approved connected sequence chain in order.");
+      }
+      if (config.kind === "parameter-experiment" || config.kind === "data-plot" || config.kind === "target-challenge") {
+        const table = source.tables.find((item) => item.id === config.tableId);
+        const ids = config.kind === "parameter-experiment" ? [config.inputColumnId, config.outputColumnId] : config.kind === "data-plot" ? [config.xColumnId, config.yColumnId] : [config.predictionColumnId];
+        if (new Set(ids).size !== ids.length) errors.push("Input and output columns must differ.");
+        if (table && ids.some((id) => table.columns.find((column) => column.id === id)?.valueType !== "number" || table.rows.some((row) => typeof row.values[id] !== "number" || !Number.isFinite(row.values[id])))) errors.push("This factory requires finite numeric source columns.");
+      }
       errors.push(...validateTableConfig(source, proposal.factoryConfig));
     }
   }

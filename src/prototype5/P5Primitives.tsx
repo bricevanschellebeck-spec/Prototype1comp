@@ -1,26 +1,96 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { getSourceDocument } from "./sources";
-import type { ApprovedLearningSpec, BlockOutcome, CompiledBlock, CompiledLessonManifest } from "./types";
+import { explorationRows, predictionModel } from "./learningRules";
+import type { BlockOutcome, CompiledBlock, CompiledLessonManifest } from "./types";
 import styles from "./prototype5.module.css";
 
 type Props = { block: CompiledBlock; manifest: CompiledLessonManifest; selectedRowId: string; revealedRows: string[]; onRow: (id: string) => void; onReveal: (id: string) => void; onComplete: (outcome: BlockOutcome) => void };
-const outcome = (block: CompiledBlock, result: BlockOutcome["result"], attempts = 1, misconceptionIds: string[] = []): BlockOutcome => ({ blockId: block.id, result, attempts, hintUsed: false, misconceptionIds });
-
-function relationshipText(spec: Pick<ApprovedLearningSpec, "concepts" | "relationships">, block: CompiledBlock) { const relation = spec.relationships.find((item) => item.id === block.relationshipIds[0]); if (!relation) return spec.concepts.slice(0, 2).map((item) => item.name).join(" and "); const from = spec.concepts.find((item) => item.id === relation.fromConceptId)?.name ?? relation.fromConceptId; const to = spec.concepts.find((item) => item.id === relation.toConceptId)?.name ?? relation.toConceptId; return `${from} ${relation.type} ${to}`; }
+const outcome = (block: CompiledBlock, result: BlockOutcome["result"], attempts = 1, hintUsed = false): BlockOutcome => ({
+  blockId: block.id, result, attempts, hintUsed,
+  misconceptionIds: result === "incorrect" ? block.possibleMisconceptionIds.slice(0, 1) : [],
+});
 
 export function P5Primitive({ block, manifest, selectedRowId, revealedRows, onRow, onReveal, onComplete }: Props) {
-  const source = getSourceDocument(manifest.sourceDocumentId)!; const table = source.tables.find((item) => "tableId" in block.render && item.id === block.render.tableId) ?? source.tables[0];
-  const [choice, setChoice] = useState(""); const [attempts, setAttempts] = useState(0); const [revealed, setRevealed] = useState(false); const [ordered, setOrdered] = useState<string[]>([]);
-  const selectedRow = table?.rows.find((row) => row.id === selectedRowId) ?? table?.rows[0];
-  const predictionCorrect = useMemo(() => { const relation = manifest.relationships.find((item) => item.id === block.relationshipIds[0]); return relation?.type === "decreases" ? "decreases" : "increases"; }, [manifest, block.relationshipIds]);
-  if (block.render.kind === "prediction") return <div className={styles.actionContent}><span>START WITH EVIDENCE</span><h2>{block.title}</h2><p>{block.prompt}</p><strong className={styles.objectQuestion}>As the input increases, what happens to the related outcome?</strong><div className={styles.choiceRow}>{["increases","decreases","stays-same"].map((id) => <button className={choice === id ? styles.selected : ""} type="button" key={id} onClick={() => setChoice(id)}>{id.replace("-", " ")}</button>)}</div><button className={styles.primary} disabled={!choice} onClick={() => { const next = attempts + 1; setAttempts(next); const correct = choice === predictionCorrect; onComplete(outcome(block, correct ? "correct" : "incorrect", next, correct ? [] : block.possibleMisconceptionIds.slice(0, 1))); }}>Commit prediction →</button><small>Relationship: {relationshipText(manifest, block)}</small></div>;
-  if (block.render.kind === "parameter-experiment") { const config = block.render; return <div className={styles.actionContent}><span>DISCRETE SOURCE EXPERIMENT</span><h2>{block.title}</h2><p>{block.prompt}</p><div className={styles.trialButtons}>{table.rows.map((row) => <button className={selectedRowId === row.id ? styles.selected : ""} type="button" key={row.id} onClick={() => { onRow(row.id); onReveal(row.id); }}>{row.values[config.inputColumnId]} {table.columns.find((column) => column.id === config.inputColumnId)?.unit}</button>)}</div>{selectedRow ? <div className={styles.measureReadout}><span>TRUSTED RESULT</span><strong>{selectedRow.values[config.outputColumnId]} {table.columns.find((column) => column.id === config.outputColumnId)?.unit}</strong></div> : null}<button className={styles.primary} disabled={revealedRows.length < 2} onClick={() => onComplete(outcome(block, "completed"))}>Keep these observations →</button></div>; }
-  if (block.render.kind === "comparison") { const rows = block.render.rowIds.map((id) => table.rows.find((row) => row.id === id)).filter(Boolean); return <div className={styles.actionContent}><span>COMPARE TRUSTED TRIALS</span><h2>{block.title}</h2><p>{block.prompt}</p><div className={styles.compareRows}>{rows.map((row) => <article key={row!.id}>{block.render.kind === "comparison" ? block.render.columnIds.map((columnId) => <b key={columnId}>{row!.values[columnId]} <small>{table.columns.find((column) => column.id === columnId)?.unit}</small></b>) : null}</article>)}</div><button className={styles.primary} onClick={() => onComplete(outcome(block, "completed"))}>Use this comparison →</button></div>; }
-  if (block.render.kind === "data-plot") { const config = block.render; return <div className={styles.actionContent}><span>GENERATE THE GRAPH</span><h2>{block.title}</h2><p>{block.prompt}</p><div className={styles.revealButtons}>{table.rows.map((row) => <button className={revealedRows.includes(row.id) ? styles.selected : ""} key={row.id} type="button" onClick={() => { onRow(row.id); onReveal(row.id); }}>{row.values[config.xColumnId]}</button>)}</div><button className={styles.primary} disabled={revealedRows.length < table.rows.length} onClick={() => onComplete(outcome(block, "completed"))}>Use the completed pattern →</button></div>; }
-  if (block.render.kind === "evidence-reveal") return <div className={styles.actionContent}><span>EVIDENCE BECOMES A RULE</span><h2>{block.title}</h2><p>{block.prompt}</p>{revealed ? <div className={styles.factReveal}>{block.render.factIds.map((id) => <strong key={id}>{manifest.facts.find((fact) => fact.id === id)?.statement}</strong>)}</div> : <button className={styles.revealAction} type="button" onClick={() => setRevealed(true)}>Reveal only approved facts</button>}<button className={styles.primary} disabled={!revealed} onClick={() => onComplete(outcome(block, "completed"))}>Carry the rule forward →</button></div>;
-  if (block.render.kind === "target-challenge") { const config = block.render; const held = table.rows.find((row) => row.id === config.heldOutRowId)!; const values = [...new Set(table.rows.map((row) => String(row.values[config.predictionColumnId])))]; return <div className={styles.actionContent}><span>HELD-OUT APPLICATION</span><h2>{block.title}</h2><p>{block.prompt}</p><div className={styles.heldOut}><span>Condition</span>{table.columns.filter((column) => column.id !== config.predictionColumnId).map((column) => <strong key={column.id}>{held.values[column.id]} {column.unit}</strong>)}</div><div className={styles.choiceRow}>{values.map((value) => <button className={choice === value ? styles.selected : ""} key={value} type="button" onClick={() => setChoice(value)}>{value} {table.columns.find((column) => column.id === config.predictionColumnId)?.unit}</button>)}</div><button className={styles.primary} disabled={!choice} onClick={() => { const next = attempts + 1; setAttempts(next); if (choice === String(held.values[config.predictionColumnId])) onComplete(outcome(block, "correct", next)); }}>Test against trusted row →</button></div>; }
-  if (block.render.kind === "step-sequence") { const items = block.render.relationshipIds; return <div className={styles.actionContent}><span>ORDER APPROVED RELATIONSHIPS</span><h2>{block.title}</h2><p>{block.prompt}</p>{items.map((id) => <button className={ordered.includes(id) ? styles.selected : ""} type="button" key={id} disabled={ordered.includes(id)} onClick={() => setOrdered((current) => [...current, id])}>{ordered.indexOf(id) >= 0 ? ordered.indexOf(id) + 1 : "·"} {id}</button>)}<button className={styles.primary} disabled={ordered.length < items.length} onClick={() => onComplete(outcome(block, "completed"))}>Keep sequence →</button></div>; }
-  return <div className={styles.actionContent}><span>APPROVED REPRESENTATION</span><h2>{block.title}</h2><p>{block.prompt}</p><button className={styles.primary} onClick={() => onComplete(outcome(block, "completed"))}>Use this evidence →</button></div>;
+  const source = getSourceDocument(manifest.sourceDocumentId)!;
+  const config = block.render;
+  const table = source.tables.find((item) => "tableId" in config && item.id === config.tableId) ?? source.tables[0];
+  const rows = table ? explorationRows(source, manifest, table.id) : [];
+  const [choice, setChoice] = useState("");
+  const [revealed, setRevealed] = useState(false);
+  const [hint, setHint] = useState(false);
+  const [ordered, setOrdered] = useState<string[]>([]);
+  const [visited, setVisited] = useState<string[]>([]);
+  const [comparisonViewed, setComparisonViewed] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const prediction = predictionModel(manifest, block);
+  function finish(result: BlockOutcome["result"]) {
+    if (submitted) return;
+    setSubmitted(true);
+    onComplete(outcome(block, result, 1, hint));
+  }
+  const heading = <><span>{block.role === "evidence" ? "TRY THIS FIRST" : "EXPLORE THE EVIDENCE"}</span><h2>{block.title}</h2></>;
+
+  if (config.kind === "prediction" && prediction) return <div className={styles.actionContent}>
+    {heading}<strong className={styles.objectQuestion}>{prediction.question}</strong>
+    <div className={styles.choiceRow}>{[["increases","↑","Increases"],["decreases","↓","Decreases"],["stays-same","=","Stays the same"]].map(([id,symbol,label]) => <button aria-pressed={choice === id} className={choice === id ? styles.selected : ""} key={id} onClick={() => setChoice(id)}><b>{symbol}</b>{label}</button>)}</div>
+    <p>Your prediction stays separate from the measurements. Test it next.</p>
+    <button className={styles.primary} disabled={!choice || submitted} onClick={() => finish(choice === prediction.correct ? "correct" : "incorrect")}>Commit prediction →</button>
+  </div>;
+
+  if (config.kind === "parameter-experiment") return <div className={styles.actionContent}>
+    {heading}<p>Select a recorded condition. Watch the measured result change.</p>
+    <div className={styles.trialButtons}>{rows.map((row) => <button aria-pressed={selectedRowId === row.id} className={selectedRowId === row.id ? styles.selected : ""} key={row.id} onClick={() => { onRow(row.id); onReveal(row.id); setVisited((current) => current.includes(row.id) ? current : [...current, row.id]); }}>{row.values[config.inputColumnId]} {table.columns.find((column) => column.id === config.inputColumnId)?.unit}</button>)}</div>
+    <p role="status">{visited.length < 2 ? "Try two different conditions." : "You have compared two conditions. What changed?"}</p>
+    <button className={styles.primary} disabled={visited.length < 2 || submitted} onClick={() => finish("completed")}>Keep these observations →</button>
+  </div>;
+
+  if (config.kind === "comparison") {
+    const comparisonRows = rows.filter((row) => config.rowIds.includes(row.id));
+    return <div className={styles.actionContent}>{heading}<p>Switch between the observed trials and compare their measurements.</p>
+      <div className={styles.compareRows}>{comparisonRows.map((row) => <button key={row.id} className={selectedRowId === row.id ? styles.selected : ""} onClick={() => { onRow(row.id); onReveal(row.id); setComparisonViewed(true); }}>{config.columnIds.map((id) => <span key={id}>{table.columns.find((column) => column.id === id)?.label}<b>{row.values[id]} {table.columns.find((column) => column.id === id)?.unit}</b></span>)}</button>)}</div>
+      <button className={styles.primary} disabled={!comparisonViewed || submitted} onClick={() => finish("completed")}>Use this comparison →</button>
+    </div>;
+  }
+
+  if (config.kind === "data-plot") return <div className={styles.actionContent}>
+    {heading}<p>Select the observed trials to place their measurements on the graph.</p>
+    <div className={styles.revealButtons}>{rows.map((row) => <button aria-pressed={revealedRows.includes(row.id)} className={revealedRows.includes(row.id) ? styles.selected : ""} key={row.id} onClick={() => { onRow(row.id); onReveal(row.id); }}>{row.values[config.xColumnId]} {table.columns.find((column) => column.id === config.xColumnId)?.unit}</button>)}</div>
+    <p>{rows.filter((row) => revealedRows.includes(row.id)).length} / {rows.length} observed points. One trial stays reserved for your challenge.</p>
+    <button className={styles.primary} disabled={!rows.every((row) => revealedRows.includes(row.id)) || submitted} onClick={() => finish("completed")}>Use the pattern →</button>
+  </div>;
+
+  if (config.kind === "evidence-reveal") return <div className={styles.actionContent}>
+    {heading}<p>Connect your observations to the source.</p>
+    {revealed ? <div className={styles.factReveal}>{config.factIds.map((id) => <strong key={id}>{manifest.facts.find((fact) => fact.id === id)?.statement}</strong>)}</div> : <button className={styles.revealAction} onClick={() => setRevealed(true)}>Show the explanation</button>}
+    <button className={styles.primary} disabled={!revealed || submitted} onClick={() => finish("completed")}>Carry the idea forward →</button>
+  </div>;
+
+  if (config.kind === "target-challenge") {
+    const held = table.rows.find((row) => row.id === config.heldOutRowId)!;
+    const values = [...new Set(table.rows.map((row) => String(row.values[config.predictionColumnId])))];
+    return <div className={styles.actionContent}>{heading}
+      <p>Which measurement fits this reserved trial?</p>
+      <div className={styles.heldOut}>{table.columns.filter((column) => column.id !== config.predictionColumnId).map((column) => <span key={column.id}>{column.label}<strong>{held.values[column.id]} {column.unit}</strong></span>)}</div>
+      <div className={styles.choiceRow}>{values.map((value) => <button aria-pressed={choice === value} className={choice === value ? styles.selected : ""} key={value} onClick={() => setChoice(value)}>{value} {table.columns.find((column) => column.id === config.predictionColumnId)?.unit}</button>)}</div>
+      <button onClick={() => setHint(true)}>Show a hint</button>
+      {hint ? <p role="status">Compare the observed points. Does this condition suggest a larger or smaller measurement?</p> : null}
+      <button className={styles.primary} disabled={!choice || submitted} onClick={() => finish(choice === String(held.values[config.predictionColumnId]) ? "correct" : "incorrect")}>Check this trial →</button>
+    </div>;
+  }
+
+  if (config.kind === "step-sequence") {
+    const items = [...config.relationshipIds].reverse();
+    return <div className={styles.actionContent}>{heading}<p>Select the stages in order.</p>
+      {items.map((id) => {
+        const relation = manifest.relationships.find((item) => item.id === id)!;
+        const names = [relation.fromConceptId, relation.toConceptId].map((key) => manifest.concepts.find((item) => item.id === key)?.name);
+        return <button className={ordered.includes(id) ? styles.selected : ""} key={id} disabled={ordered.includes(id)} onClick={() => setOrdered((current) => [...current, id])}>{ordered.includes(id) ? ordered.indexOf(id) + 1 : "·"} {names.join(" → ")}</button>;
+      })}
+      <button onClick={() => setOrdered([])}>Reset order</button>
+      <button className={styles.primary} disabled={ordered.length !== items.length || submitted} onClick={() => finish(ordered.every((id, index) => id === config.relationshipIds[index]) ? "correct" : "incorrect")}>Check the sequence →</button>
+    </div>;
+  }
+  return <div className={styles.actionContent}><h2>Representation unavailable</h2><p>Return to the planner and select a supported interaction.</p></div>;
 }

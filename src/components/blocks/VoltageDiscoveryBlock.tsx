@@ -9,10 +9,11 @@ type Props = {
 };
 
 export function VoltageDiscoveryBlock({ block, onInteraction }: Props) {
-  if (block.content.kind !== "voltage-discovery") return null;
-
   const [batteryPresent, setBatteryPresent] = useState(true);
   const [compared, setCompared] = useState(false);
+
+  if (block.content.kind !== "voltage-discovery") return null;
+
   const { fixedVoltage, heading } = block.content;
 
   function toggleBattery() {

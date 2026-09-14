@@ -178,6 +178,8 @@ describe("P6.5 gold-standard learning language", () => {
     const first = addReferenceKnowledge({ reference: emptyLivingReference(circuitLesson), lesson: circuitLesson, activity: voltage, event: voltageEvidence, goal: "understand", depth: "learn", scene });
     const second = addReferenceKnowledge({ reference: first.reference, lesson: circuitLesson, activity: close, event: closeEvidence, goal: "understand", depth: "learn", scene });
     expect(second.reference.sections.map((section) => section.id)).toEqual(["complete-circuit", "current", "voltage"]);
+    expect(second.updatedSectionIds).toEqual(["complete-circuit", "current"]);
+    expect(second.reference.sections.find((section) => section.id === "complete-circuit")?.referenceState).toBe("explored");
     expect(second.reference.sections.find((section) => section.id === "voltage")?.learnerEvidence[0].measurements).toEqual([
       { input: "9 V · 4 Ω", output: "2.25 A" },
       { input: "12 V · 4 Ω", output: "3.00 A" },
@@ -195,6 +197,7 @@ describe("P6.5 gold-standard learning language", () => {
     const relationship = update.reference.sections.find((section) => section.id === "relationships")!;
     expect(relationship.canonicalKnowledge.some((item) => item.kind === "relationship")).toBe(true);
     expect(relationship.learnerEvidence[0].measurements).toHaveLength(4);
+    expect(relationship.referenceState).toBe("established");
     expect(relationship).not.toHaveProperty("mastery");
   });
 

@@ -226,6 +226,74 @@
 
 @media(max-width:900px){.conceptReveal{width:285px}.referenceMap{grid-template-columns:1fr}}
 
+/* Living reference: a quiet companion attached to the scene, never a destination. */
+.livingCompanion{
+  position:absolute;
+  right:18px;
+  bottom:18px;
+  z-index:26;
+  width:292px;
+  color:#173a31;
+  border:1px solid #70897e;
+  border-top:3px solid var(--accent);
+  background:#fffdf4;
+  box-shadow:0 14px 38px rgba(18,52,43,.2);
+  transition:width .32s ease,box-shadow .32s ease,transform .22s ease;
+}
+.livingCompanion[data-expanded=true]{width:min(420px,38vw);box-shadow:0 20px 52px rgba(18,52,43,.26)}
+.livingCompanion>header{display:flex;min-height:45px;align-items:stretch;justify-content:space-between;color:white;background:#173a31}
+.companionHome,.companionLessonButton{border:0;color:inherit;background:transparent;cursor:pointer}
+.companionHome{display:flex;padding:8px 11px;align-items:flex-start;flex-direction:column;text-align:left}
+.companionHome small{color:var(--accent);font-size:6px;font-weight:900;letter-spacing:.13em}
+.companionHome strong{margin-top:3px;font:15px Georgia}
+.companionLessonButton{padding:0 11px;border-left:1px solid rgba(255,255,255,.16);font-size:8px;font-weight:900}
+.companionLessonButton:hover,.companionLessonButton:focus-visible{color:#173a31;background:var(--accent);outline:2px solid white;outline-offset:-3px}
+.companionLessonButton b{display:inline-grid;width:19px;height:19px;margin-left:4px;place-items:center;border-radius:50%;color:#173a31;background:var(--accent);font-size:8px}
+.companionLessonButton:disabled{opacity:.48;cursor:not-allowed}
+.companionContent{min-height:126px;padding:13px 14px;animation:reference-swap .18s ease both}
+.companionContent>small,.companionDeep>small,.companionHistory>small{color:#0d6548;font-size:6px;font-weight:900;letter-spacing:.13em}
+.companionContent[data-preview=true]>small{color:#a85434}
+.companionContent h3{margin:5px 0 6px;font:22px/1 Georgia}
+.companionContent>p{margin:0;color:#4f665c;font:12px/1.4 Georgia}
+.companionTitle{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.companionTitle h3{margin-right:auto}.companionTitle>strong{color:#0d6548;font:17px Georgia}
+.companionActions{display:flex;margin-top:11px;padding-top:8px;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid #ccd5cc}
+.companionActions button{padding:5px 8px;border:1px solid #587267;color:#173a31;background:transparent;cursor:pointer;font-size:7px;font-weight:900}
+.companionActions button:hover,.companionActions button:focus-visible{background:var(--accent);outline:2px solid #173a31;outline-offset:1px}
+.companionActions span{color:#77857e;font-size:6px;text-align:right}
+.companionDeep{max-height:180px;margin-top:10px;padding:10px;overflow:auto;border-left:3px solid var(--accent);background:#edf1e9;animation:attach .25s ease both}
+.companionDeep p{margin:4px 0 8px;font:11px/1.38 Georgia}.companionDeep p:last-child{margin-bottom:0}
+.companionMeasurements{display:grid;margin:10px 0 0;gap:3px}
+.companionMeasurements>div{display:flex;padding:5px 7px;justify-content:space-between;background:#e8ede6}
+.companionMeasurements dt,.companionMeasurements dd{margin:0;font:9px Arial}.companionMeasurements dd{font-weight:900}
+.companionRelationship{display:block;margin-top:8px;padding:8px 9px;color:#173a31;border-left:3px solid #ef7b43;background:#fff0e7;font:12px/1.3 Georgia}
+.companionHistory{position:absolute;right:0;bottom:100%;width:100%;max-height:260px;padding:10px;overflow:auto;border:1px solid #70897e;background:#f6f4ea;box-shadow:0 -12px 30px rgba(18,52,43,.16);animation:companion-history .22s ease both}
+.companionHistory>small{display:block;margin-bottom:7px}
+.companionHistory>button{display:flex;width:100%;padding:8px 9px;align-items:center;justify-content:space-between;border:0;border-top:1px solid #cad4cb;color:#173a31;background:transparent;cursor:pointer;text-align:left}
+.companionHistory>button:hover,.companionHistory>button:focus-visible{background:#e5eadf;outline:2px solid var(--accent);outline-offset:-2px}
+.companionHistory span{font:12px Georgia}.companionHistory em{color:#6b7e74;font-size:6px;font-style:normal;text-transform:uppercase}
+.companionHistory p{margin:10px 0;color:#718078;font:11px Georgia}
+.companionHistory .openFullReference{margin-top:6px;color:#173a31;background:var(--accent);font-weight:900}
+@keyframes reference-swap{from{opacity:.45;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes companion-history{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* The mini reference now owns micro explanations; do not spawn competing cards over the circuit. */
+.circuitContinuum .objectDetail,.circuitContinuum .contextualExplanation,.circuitContinuum .conceptReveal{display:none}
+.evidenceTrail{right:330px}
+.objectLabel:has(.explainObject:focus-visible),.objectLabel:hover{opacity:1!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 78%,transparent)}
+
+@media(max-width:900px){
+  .livingCompanion{right:10px;bottom:10px;width:250px}
+  .livingCompanion[data-expanded=true]{width:min(360px,46vw)}
+  .evidenceTrail{right:275px}
+}
+@media(max-height:650px){
+  .livingCompanion{bottom:8px;transform:scale(.92);transform-origin:bottom right}
+  .livingCompanion[data-expanded=true]{max-height:470px}
+  .companionContent{min-height:108px;padding:10px 12px}
+}
+@media(prefers-reduced-motion:reduce){.livingCompanion,.companionContent,.companionHistory{animation:none!important;transition-duration:.15s!important}}
+
 /* Small activity-language experiment: evidence is manipulated inside the persistent scene. */
 .learningRail:has(.activityDock[data-interaction=compare-resistance]),
 .learningRail:has(.activityDock[data-interaction=repair-circuit]){left:22px;right:auto;top:60px;width:340px;min-width:0}

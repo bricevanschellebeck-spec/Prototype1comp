@@ -93,11 +93,11 @@ The timeline, event markers, cause network, source fragments, and learner-built 
 
 ## Living reference
 
-`My lesson` begins empty. The lesson is where knowledge is experienced; the reference is where established knowledge is preserved. Meaningful outcomes add concept sections, trusted explanations, relationships, representations, and learner-produced evidence. Tiny UI events and unfinished interactions do not create entries.
+`My lesson` begins empty. A small living-reference companion remains visible in the learning scene: object hover, focus, click, and tap produce temporary contextual previews, while meaningful outcomes add durable concept sections, trusted explanations, relationships, representations, and learner-produced evidence. A preview is explicitly not treated as learned knowledge.
 
 The session model is structured rather than a Markdown transcript. Each conceptually ordered section records its knowledge status (`introduced`, `explored`, `practised`, or `demonstrated`), canonical knowledge, learner evidence, representations, relationships, and trusted fact/relationship IDs. Inclusion is deliberately separate from the learner-evidence model and never implies mastery.
 
-Curious keeps only core discoveries; Understand builds a fuller reference. Test temporarily locks the drawer during an unanswered diagnostic so it cannot leak the answer. The former fixed textbook appears only after the active journey as an optional prototype comparison. Nothing persists across sessions yet, but the model can later sit behind a persistent subject reference without changing its basic separation of trusted knowledge and learner evidence.
+When no object is being inspected, the companion returns to the current learning concept or latest important learning event. Its compact `My lesson` history reopens accumulated entries in place; major concepts can expand along the edge without hiding the persistent scene. Curious keeps this layer small, Understand uses it more actively, and Test temporarily suppresses answer-like reference content during an unanswered diagnostic. The former fixed textbook appears only after the active journey as an optional prototype comparison. Nothing persists across sessions yet, but the model can later sit behind a persistent subject reference without changing its basic separation of trusted knowledge and learner evidence.
 
 ## Progressive information reveal
 

@@ -110,6 +110,9 @@ This document accumulates learner-route findings before any large cross-route re
 - Trusted canonical knowledge and learner-generated evidence are rendered separately and retain distinct source metadata.
 - Reference inclusion uses `introduced`, `explored`, `practised`, and `demonstrated` states; none is presented as mastery.
 - Curious and Understand use the same system with different density. Revision and Test behaviour remains open for their dedicated evaluations, except for the universal safety rule that unanswered diagnostics cannot expose answer-like reference content.
+- The reference is now permanently present as a corner companion. Scene-object hover, focus, click, or tap changes it into a temporary preview; leaving the object restores the active concept.
+- Completed learning events automatically update the companion, learner measurements are preserved beside the trusted relationship, and a compact in-scene history reopens earlier entries.
+- Major entries can expand as a side/corner knowledge layer while the persistent circuit remains visible. Object previews remain separate from the `introduced`, `explored`, and `established` reference states.
 
 ## Cross-route decision rule
 

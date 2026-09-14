@@ -1,39 +1,15 @@
-import type { ApprovedLearningSpec, ModelProfile, PrimitiveFactoryDescription, SourceDocument } from "./types";
+import type { ApprovedLearningSpec, ModelProfile, SourceDocument } from "./types";
 import { z } from "zod";
-import { analysisDraftSchema, representationPlanSchema } from "./contracts";
+import { analysisDraftSchema } from "./contracts";
+import { createP5Provider, P5_LOCAL_MODEL } from "./localModel";
+import { representationSelectionJsonSchema, type RepresentationCandidate } from "./representationCandidates";
 
-type OllamaEnvelope = { model?: string; message?: { content?: string }; prompt_eval_count?: number; eval_count?: number };
-
-export function modelForProfile(profile: ModelProfile) {
-  return profile === "fast"
-    ? process.env.P5_ANALYZER_FAST_MODEL?.trim() || "qwen3:4b-instruct"
-    : process.env.P5_ANALYZER_QUALITY_MODEL?.trim() || "qwen3:14b";
-}
-
-export function plannerModelForProfile(profile: ModelProfile) {
-  return profile === "fast"
-    ? process.env.P5_ANALYZER_FAST_MODEL?.trim() || "qwen3:4b-instruct"
-    : process.env.P5_PLANNER_MODEL?.trim() || "qwen3:14b";
-}
-
-function baseUrl() { return (process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434").replace(/\/$/, ""); }
+export function modelForProfile() { return P5_LOCAL_MODEL; }
+export function plannerModelForProfile() { return P5_LOCAL_MODEL; }
 
 const analysisJsonSchema = z.toJSONSchema(analysisDraftSchema);
-const representationJsonSchema = z.toJSONSchema(representationPlanSchema);
-
-async function ollamaJson(model: string, system: string, prompt: string, format: object, signal?: AbortSignal) {
-  const response = await fetch(`${baseUrl()}/api/chat`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, signal, cache: "no-store",
-    body: JSON.stringify({
-      model, stream: false, think: false, format, keep_alive: "15m",
-      messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-      options: { temperature: 0.05, num_ctx: 4096, num_predict: 1450 },
-    }),
-  });
-  if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}.`);
-  const payload = (await response.json()) as OllamaEnvelope;
-  if (!payload.message?.content) throw new Error("Ollama returned no structured content.");
-  return { content: payload.message.content, model: payload.model || model };
+async function ollamaJson(system: string, prompt: string, format: object, signal?: AbortSignal, maxTokens?: number, contextTokens?: number) {
+  return createP5Provider().generate({ system, prompt, format, signal, maxTokens, contextTokens });
 }
 
 function analysisPrompt(source: SourceDocument, modelId: string, correction?: { errors: string[]; previous: string }) {
@@ -49,31 +25,37 @@ ${JSON.stringify(source)}
 Before returning, verify that concepts and facts are not empty, every quote is copied exactly, every referenced tempId exists in this same response, and the complete JSON object matches the requested shape.`;
 }
 
-function planningPrompt(spec: ApprovedLearningSpec, catalog: PrimitiveFactoryDescription[], correction?: { errors: string[]; previous: string }) {
-  return `${correction ? `Your previous JSON was rejected. Correct only these errors:\n${correction.errors.join("\n")}\nPrevious response:\n${correction.previous}\n\n` : ""}Plan approved interactive representations for this human-approved learning specification. Use only IDs present in the specification and only primitive/config shapes in the catalog. Do not write UI copy, JSX, CSS, coordinates, generated values, or new knowledge. Prefer a small varied set. For table lessons, useful coverage is prediction, discrete parameter experiment, data plot, evidence reveal, and held-out target challenge. If the catalog cannot represent an objective, set representationGap true and explain why.
+function planningPrompt(spec: ApprovedLearningSpec, candidates: RepresentationCandidate[], correction?: { errors: string[]; previous: string }) {
+  return `${correction ? `REPAIR YOUR SELECTION. Correct these errors:\n${correction.errors.join("\n")}\nPrevious selection:\n${correction.previous}\n\n` : ""}Choose a short, coherent interactive path for each approved objective. Every candidate below is already source-grounded and has a deterministic factory configuration. Select candidate IDs only. Never invent or edit an ID, table, column, value, fact, relationship, component, or UI property.
+
+For a represented objective select 3-5 varied candidates. The complete selection must include:
+1. one evidence activity,
+2. one support-capable activity: parameter experiment, comparison, or evidence reveal,
+3. one final apply activity.
+Prefer prediction before revealing evidence. Do not report a representation gap when legal candidates cover the objective.
 
 Return exactly:
-{"schemaVersion":"p5-representations-1","sourceDocumentId":"${spec.sourceDocumentId}","objectivePlans":[{"objectiveId":"approved objective ID","representationGap":false,"proposals":[{"tempId":"p1","primitiveId":"prediction","role":"evidence","supportingFactIds":["approved fact ID"],"relationshipIds":["approved relationship ID"],"factoryConfig":{"kind":"prediction","relationshipId":"approved relationship ID"}}]}]}
+{"schemaVersion":"p5-representation-selection-1","sourceDocumentId":"${spec.sourceDocumentId}","objectiveSelections":[{"objectiveId":"exact objective ID","representationGap":false,"selectedCandidateIds":["exact candidate ID"]}]}
 
-Primitive and config pairs:
-${JSON.stringify(catalog)}
-Approved specification:
-${JSON.stringify(spec)}`;
+Approved objectives:
+${JSON.stringify(spec.objectives.map((item) => ({ id: item.id, statement: item.statement })))}
+Legal candidates (copy only their IDs):
+${JSON.stringify(candidates.map((item) => ({ id: item.id, objectiveId: item.objectiveId, label: item.label, primitiveId: item.proposal.primitiveId, role: item.proposal.role })))}`;
 }
 
 export class OllamaSourceAnalyzer {
   readonly providerId = "ollama" as const;
-  constructor(readonly profile: ModelProfile, readonly modelId = modelForProfile(profile)) {}
+  constructor(readonly profile: ModelProfile, readonly modelId = modelForProfile()) {}
   analyze(source: SourceDocument, options: { signal?: AbortSignal; correction?: { errors: string[]; previous: string } } = {}) {
-    return ollamaJson(this.modelId, "You are a source-grounded curriculum analyst. Return strict JSON only. Never use knowledge outside the supplied source.", analysisPrompt(source, this.modelId, options.correction), analysisJsonSchema, options.signal);
+    return ollamaJson("You are a source-grounded curriculum analyst. Return strict JSON only. Never use knowledge outside the supplied source.", analysisPrompt(source, this.modelId, options.correction), analysisJsonSchema, options.signal, 1500, 4096);
   }
 }
 
 export class OllamaRepresentationPlanner {
   readonly providerId = "ollama" as const;
   readonly modelId: string;
-  constructor(readonly profile: ModelProfile) { this.modelId = plannerModelForProfile(profile); }
-  plan(spec: ApprovedLearningSpec, catalog: PrimitiveFactoryDescription[], options: { signal?: AbortSignal; correction?: { errors: string[]; previous: string } } = {}) {
-    return ollamaJson(this.modelId, "You are a constrained learning-representation planner. Return strict JSON using only supplied IDs and factory shapes.", planningPrompt(spec, catalog, options.correction), representationJsonSchema, options.signal);
+  constructor(readonly profile: ModelProfile) { this.modelId = plannerModelForProfile(); }
+  plan(source: SourceDocument, spec: ApprovedLearningSpec, candidates: RepresentationCandidate[], options: { signal?: AbortSignal; correction?: { errors: string[]; previous: string } } = {}) {
+    return ollamaJson("You are a constrained learning-representation selector. Return strict JSON using only supplied candidate IDs.", planningPrompt(spec, candidates, options.correction), representationSelectionJsonSchema(source, spec, candidates), options.signal, 500, 3072);
   }
 }

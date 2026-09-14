@@ -19,6 +19,12 @@ const statusRank: Record<ReferenceContribution["status"], number> = {
   demonstrated: 4,
 };
 
+function referenceStateFor(status: ReferenceContribution["status"], event: EvidenceEvent) {
+  if (event.result === "strong" && (status === "practised" || status === "demonstrated")) return "established" as const;
+  if (status === "explored" || status === "practised" || status === "demonstrated") return "explored" as const;
+  return "introduced" as const;
+}
+
 export function emptyLivingReference(lesson: GoldLesson): LivingReference {
   return { subjectId: lesson.id, subject: lesson.subject, sections: [] };
 }
@@ -63,12 +69,13 @@ export function addReferenceKnowledge(options: {
   depth: P65Depth;
   hasPriorGap?: boolean;
   scene: SceneState;
-}): { reference: LivingReference; addedSectionIds: string[] } {
+}): { reference: LivingReference; addedSectionIds: string[]; updatedSectionIds: string[] } {
   const { reference, lesson, activity, event, goal, depth, hasPriorGap = false, scene } = options;
   const contributions = referenceContributionsForOutcome(activity, event, goal, depth, hasPriorGap);
   const valid = contributions.filter((item) => validateReferenceContribution(lesson, item).length === 0);
   const byId = new Map(reference.sections.map((section) => [section.id, section]));
   const addedSectionIds: string[] = [];
+  const updatedSectionIds: string[] = [];
 
   for (const contribution of valid) {
     const definition = lesson.referenceStructure.find((section) => section.id === contribution.sectionId);
@@ -85,6 +92,7 @@ export function addReferenceKnowledge(options: {
     const next: LivingReferenceSection = {
       ...definition,
       status: previous && statusRank[previous.status] > statusRank[contribution.status] ? previous.status : contribution.status,
+      referenceState: previous?.referenceState === "established" ? "established" : referenceStateFor(contribution.status, event),
       canonicalKnowledge: alreadyKnown ? canonicalKnowledge : [...canonicalKnowledge, contribution],
       learnerEvidence: nextEvidence,
       representations: uniqueRepresentations([...(previous?.representations ?? []), ...(contribution.representations ?? [])]),
@@ -93,12 +101,14 @@ export function addReferenceKnowledge(options: {
       supportingRelationshipIds: unique([...(previous?.supportingRelationshipIds ?? []), ...contribution.supportingRelationshipIds]),
     };
     byId.set(definition.id, next);
+    if (!updatedSectionIds.includes(definition.id)) updatedSectionIds.push(definition.id);
     if (!previous) addedSectionIds.push(definition.id);
   }
 
   return {
     reference: { ...reference, sections: [...byId.values()].sort((a, b) => a.order - b.order) },
     addedSectionIds,
+    updatedSectionIds,
   };
 }
 
